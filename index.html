@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>GHL Trophy Tracker</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="page-shell">
+      <header class="topbar">
+        <div class="brand-wrap">
+          <div class="brand-mark">🏒</div>
+          <div>
+            <p class="eyebrow">GHL League</p>
+            <h2>Trophy Tracker</h2>
+          </div>
+        </div>
+
+        <label class="season-picker" for="seasonSelect">
+          <span>Season</span>
+          <select id="seasonSelect"></select>
+        </label>
+      </header>
+
+      <main class="dashboard">
+        <section class="hero-panel">
+          <div>
+            <p class="eyebrow">League Honors</p>
+            <h1 id="seasonTitle">2026-2027</h1>
+          </div>
+          <div class="hero-stats">
+            <div class="stat-box last-updated-box">
+              <span class="stat-label">Updated</span>
+              <strong id="lastUpdatedText">--</strong>
+            </div>
+          </div>
+        </section>
+
+        <div class="dashboard-layout">
+          <section id="trophyGrid" class="trophy-grid" aria-live="polite"></section>
+
+          <aside class="leaderboard-panel" aria-live="polite">
+            <div class="leaderboard-header">
+              <p class="eyebrow">Season leaderboard</p>
+              <h3>Unique trophies</h3>
+            </div>
+            <div id="leaderboard" class="leaderboard"></div>
+          </aside>
+        </div>
+      </main>
+    </div>
+
+    <script src="app.js"></script>
+  </body>
+</html>
