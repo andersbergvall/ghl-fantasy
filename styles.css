@@ -255,10 +255,38 @@ select {
 }
 
 .trophy-header {
+  width: 100%;
+}
+
+.trophy-summary-main {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+}
+
+.summary-title-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(140px, 260px);
+  grid-template-columns: 34px minmax(0, 1fr) 20px;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
+  width: 100%;
+}
+
+.trophy-title-block {
+  min-width: 0;
+  width: 100%;
+}
+
+.trophy-name-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.trophy-current-row {
   width: 100%;
 }
 
@@ -288,7 +316,7 @@ select {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  text-align: right;
+  text-align: left;
 }
 
 .collapse-indicator {
@@ -321,12 +349,20 @@ select {
   font-size: 0.96rem;
   font-weight: 800;
   letter-spacing: -0.04em;
+  min-width: 0;
+  white-space: normal;
+  word-break: break-word;
 }
 
 .trophy-desc {
-  margin: 4px 0 0;
+  display: inline-block;
+  margin: 0;
   font-size: 0.64rem;
   color: var(--muted);
+  line-height: 1.4;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .trophy-panel {
@@ -498,5 +534,13 @@ select {
 
   .winner-summary {
     max-width: none;
+  }
+
+  .summary-title-row {
+    grid-template-columns: 34px minmax(0, 1fr) 18px;
+  }
+
+  .trophy-name {
+    font-size: 0.9rem;
   }
 }

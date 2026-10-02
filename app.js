@@ -1,27 +1,27 @@
 const trophyMeta = {
   "Art Ross": { icon: "🏆", description: "Top scoring leader" },
   "Rocket Richard": { icon: "🎯", description: "Most goals" },
-  "Norris": { icon: "🛡️", description: "Top point producer" },
-  "Selke": { icon: "🧤", description: "Best defensive presence" },
+  "Norris": { icon: "🛡️", description: "Most points by defensemen" },
+  "Selke": { icon: "🧤", description: "Best +/- stats" },
   "Lady Byng": { icon: "👑", description: "Most disciplined / lowest PIM" },
   "Jim Gregory": { icon: "📅", description: "Most games played" },
   "Vezina": { icon: "🥅", description: "Top goaltending" },
   "Hart": { icon: "🏅", description: "League MVP" },
-  "Calder": { icon: "🌟", description: "Top rookie" },
+  "Calder": { icon: "🌟", description: "Best keeper" },
   "Jack Adams": { icon: "🧭", description: "Coach of the year" },
   "Conn Smythe": { icon: "🧢", description: "Playoff MVP" },
   "Stanley Cup": { icon: "🏆", description: "Championship" },
-  "President's Trophy": { icon: "🥇", description: "Best regular season" },
-  "Scout's honor": { icon: "🔎", description: "Team award" },
-  "Fantalytic's Frenzy": { icon: "⚡", description: "Fantasy frenzy" },
+  "President's Trophy": { icon: "🥇", description: "Who knows..." },
+  "Scout's honor": { icon: "🔎", description: "Best drafted team" },
+  "Fantalytic's Frenzy": { icon: "⚡", description: "Best prediction" },
   "It's Vegas Baby!": { icon: "🎲", description: "Special bounty" },
-  "Back's Backe Back-2-Back": { icon: "🔁", description: "Back-to-back bounty" },
-  "The King is Dead!": { icon: "👑", description: "Playoff bounty" },
-  "Chasing the Cup!": { icon: "🏒", description: "Cup chase" },
+  "Back's Backe Back-2-Back": { icon: "🔁", description: "Half-time leader" },
+  "The King is Dead!": { icon: "👑", description: "Take out the President" },
+  "Chasing the Cup!": { icon: "🏒", description: "Beat last year's Stanley Cup winner" },
   "Bitter Looser or Righteous Winner!": { icon: "🔥", description: "High stakes" },
   "Clarence S. Campbell": { icon: "🏟️", description: "Conference champion" },
-  "Prince of Wales": { icon: "🛡️", description: "Eastern final" },
-  "Orange Lantern": { icon: "🟠", description: "Playoff milestone" },
+  "Prince of Wales": { icon: "🛡️", description: "Conference champion" },
+  "Orange Lantern": { icon: "🟠", description: "Looser of the looser bracket" },
 };
 
 const seasonSelect = document.getElementById("seasonSelect");
@@ -257,17 +257,20 @@ function renderCard(itemName, itemValue) {
   card.innerHTML = `
     <button class="trophy-toggle" type="button" aria-expanded="false">
       <div class="trophy-header">
-        <div class="brand-wrap trophy-summary-left" style="gap: 12px;">
-          <div class="trophy-icon">${meta.icon}</div>
-          <div>
-            <div class="trophy-name">${itemName}</div>
-            <p class="trophy-desc">${meta.description}</p>
+        <div class="trophy-summary-main">
+          <div class="summary-title-row">
+            <div class="trophy-icon">${meta.icon}</div>
+            <div class="trophy-title-block">
+              <div class="trophy-name-row">
+                <div class="trophy-name">${itemName}</div>
+                <span class="trophy-desc">${meta.description}</span>
+              </div>
+            </div>
+            <span class="collapse-indicator">▾</span>
           </div>
-        </div>
-
-        <div class="trophy-summary-right">
-          <span class="winner-summary">${summaryText}</span>
-          <span class="collapse-indicator">▾</span>
+          <div class="trophy-current-row">
+            <span class="winner-summary">${summaryText}</span>
+          </div>
         </div>
       </div>
     </button>
