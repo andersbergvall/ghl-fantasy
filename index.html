@@ -12,34 +12,29 @@
   <body>
     <div class="page-shell">
       <header class="topbar">
-        <div class="brand-wrap">
-          <div class="brand-mark">🏒</div>
-          <div>
-            <p class="eyebrow">GHL League</p>
-            <h2>Trophy Tracker</h2>
+        <div class="topbar-main">
+          <div class="brand-wrap">
+            <div class="brand-mark">🏒</div>
+            <div class="topbar-copy">
+              <h2 class="topbar-title">GHL Trophy Tracker</h2>
+              <p class="topbar-subtitle">League Honors <span id="seasonTitle" class="topbar-season">2026-2027</span></p>
+            </div>
           </div>
         </div>
 
-        <label class="season-picker" for="seasonSelect">
-          <span>Season</span>
-          <select id="seasonSelect"></select>
-        </label>
+        <div class="topbar-controls">
+          <label class="season-picker" for="seasonSelect">
+            <span>Season</span>
+            <select id="seasonSelect"></select>
+          </label>
+          <div class="topbar-updated">
+            <span class="stat-label">Updated</span>
+            <span id="lastUpdatedText" class="updated-text">--</span>
+          </div>
+        </div>
       </header>
 
       <main class="dashboard">
-        <section class="hero-panel">
-          <div>
-            <p class="eyebrow">League Honors</p>
-            <h1 id="seasonTitle">2026-2027</h1>
-          </div>
-          <div class="hero-stats">
-            <div class="stat-box last-updated-box">
-              <span class="stat-label">Updated</span>
-              <strong id="lastUpdatedText">--</strong>
-            </div>
-          </div>
-        </section>
-
         <div class="dashboard-layout">
           <section id="trophyGrid" class="trophy-grid" aria-live="polite"></section>
 

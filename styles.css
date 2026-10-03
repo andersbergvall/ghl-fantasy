@@ -45,32 +45,59 @@ body {
 
 .topbar {
   display: flex;
-  align-items: center;
+  align-items: stretch;
   justify-content: space-between;
   gap: 18px;
-  padding: 14px clamp(18px, 4vw, 40px);
+  padding: 12px 14px;
   border: 1px solid var(--line);
   background: rgba(17, 26, 43, 0.92);
   backdrop-filter: blur(12px);
   border-radius: 18px;
   box-shadow: var(--shadow);
+  min-height: 110px;
+}
+
+.topbar-main {
+  display: flex;
+  align-items: stretch;
+  gap: 20px;
+  min-width: 0;
+  flex: 1;
+}
+
+.topbar-controls {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 6px;
+  min-height: 100%;
 }
 
 .brand-wrap {
   display: flex;
-  align-items: center;
-  gap: 12px;
+  align-items: stretch;
+  gap: 14px;
+  min-height: 100%;
 }
 
 .brand-mark {
   display: grid;
   place-items: center;
-  width: 42px;
-  height: 42px;
-  border-radius: 12px;
+  width: 76px;
+  height: 76px;
+  border-radius: 14px;
   background: linear-gradient(135deg, rgba(125, 182, 255, 0.22), rgba(116, 174, 247, 0.1));
   border: 1px solid rgba(125, 182, 255, 0.25);
-  font-size: 1.35rem;
+  font-size: 2.1rem;
+}
+
+.topbar-copy {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 8px;
+  min-height: 100%;
 }
 
 .eyebrow {
@@ -93,31 +120,63 @@ h2 {
   letter-spacing: -0.03em;
 }
 
+.topbar-title {
+  font-family: "Inter", sans-serif;
+  font-size: 1.55rem;
+  letter-spacing: -0.02em;
+  color: var(--sweater);
+  font-weight: 800;
+  line-height: 1.05;
+}
+
+.topbar-subtitle {
+  margin: 0;
+  color: var(--muted);
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  line-height: 1.1;
+}
+
+.topbar-season {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--ice);
+  margin-top: 0;
+  letter-spacing: 0.01em;
+}
+
 .season-picker {
   display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  padding: 8px 12px;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  padding: 0;
   font-weight: 600;
   color: var(--text);
 }
 
 .season-picker span {
   color: var(--muted);
-  font-size: 0.75rem;
+  font-size: 0.64rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-weight: 700;
 }
 
 select {
   border: none;
   background: transparent;
-  color: var(--text);
+  color: #6bd3ff;
   font: inherit;
-  font-weight: 700;
+  font-size: 0.76rem;
+  font-weight: 600;
   outline: none;
-  min-width: 128px;
+  min-width: 96px;
+  text-align: right;
 }
 
 .dashboard {
@@ -130,8 +189,24 @@ select {
   gap: 18px;
   align-items: start;
   margin-top: 18px;
-  padding-left: clamp(8px, 4vw, 48px);
-  padding-right: clamp(8px, 4vw, 48px);
+  padding-left: 0;
+  padding-right: 0;
+}
+
+.topbar-updated {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  min-width: 0;
+}
+
+.updated-text {
+  color: #6bd3ff;
+  font-size: 0.76rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
 }
 
 .hero-panel {
@@ -421,6 +496,9 @@ select {
 .team-player {
   font-size: 0.72rem;
   color: var(--muted);
+  display: block;
+  width: 100%;
+  text-align: left;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -510,11 +588,23 @@ select {
   }
 
   .topbar,
-  .hero-panel,
   .trophy-header,
   .dashboard-layout {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .topbar-main {
+    width: 100%;
+    align-items: stretch;
+    gap: 8px;
+  }
+
+  .topbar-controls {
+    width: 100%;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 8px;
   }
 
   .dashboard-layout {
@@ -523,8 +613,23 @@ select {
     padding-right: 0;
   }
 
-  .hero-panel {
-    padding: 18px 16px;
+  .topbar-updated {
+    align-items: flex-end;
+  }
+
+  .brand-mark {
+    width: 56px;
+    height: 56px;
+    font-size: 1.8rem;
+  }
+
+  .topbar-title {
+    font-size: 1.28rem;
+  }
+
+  .topbar-subtitle,
+  .topbar-season {
+    font-size: 0.86rem;
   }
 
   .trophy-summary-right {

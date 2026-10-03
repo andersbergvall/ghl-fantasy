@@ -14,13 +14,13 @@ const trophyMeta = {
   "President's Trophy": { icon: "🥇", description: "Who knows..." },
   "Scout's honor": { icon: "🔎", description: "Best drafted team" },
   "Fantalytic's Frenzy": { icon: "⚡", description: "Best prediction" },
-  "It's Vegas Baby!": { icon: "🎲", description: "Special bounty" },
+  "It's Vegas Baby!": { icon: "🎲", description: "Higest weekly score" },
   "Back's Backe Back-2-Back": { icon: "🔁", description: "Half-time leader" },
   "The King is Dead!": { icon: "👑", description: "Take out the President" },
   "Chasing the Cup!": { icon: "🏒", description: "Beat last year's Stanley Cup winner" },
-  "Bitter Looser or Righteous Winner!": { icon: "🔥", description: "High stakes" },
-  "Clarence S. Campbell": { icon: "🏟️", description: "Conference champion" },
-  "Prince of Wales": { icon: "🛡️", description: "Conference champion" },
+  "Bitter Looser or Righteous Winner!": { icon: "🔥", description: "" },
+  "Clarence S. Campbell": { icon: "🏟️", description: "Western Champion" },
+  "Prince of Wales": { icon: "🛡️", description: "Eastern Champion" },
   "Orange Lantern": { icon: "🟠", description: "Looser of the looser bracket" },
 };
 
@@ -279,8 +279,7 @@ function renderCard(itemName, itemValue) {
       <ul class="trophy-list">
         ${listEntries.length
           ? listEntries.map((row, index) => {
-              const hasPlayer = Boolean(row.player);
-              const playerHtml = hasPlayer ? `<span class="team-player">${row.player}</span>` : "";
+              const playerHtml = `<span class="team-player">${row.player || ""}</span>`;
               return `
                 <li>
                   <span class="rank">${index + 1}</span>
@@ -327,7 +326,8 @@ function renderTrophies(seasonKey) {
 
   seasonTitle.textContent = seasonKey;
   if (lastUpdatedText) {
-    lastUpdatedText.textContent = seasonData.lastupdate || seasonData.lastupdated || "--";
+    const rawUpdated = seasonData.lastupdate || seasonData.lastupdated || "--";
+    lastUpdatedText.textContent = rawUpdated && rawUpdated !== "--" ? `${rawUpdated} CET` : "--";
   }
   if (trophyCount) {
     trophyCount.textContent = Object.values(seasonData).reduce((total, group) => total + Object.keys(group || {}).length, 0);
