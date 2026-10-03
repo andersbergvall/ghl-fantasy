@@ -17,19 +17,17 @@
             <div class="brand-mark">🏒</div>
             <div class="topbar-copy">
               <h2 class="topbar-title">GHL Trophy Tracker</h2>
-              <p class="topbar-subtitle">League Honors <span id="seasonTitle" class="topbar-season">2026-2027</span></p>
+              <div class="topbar-subtitle-row">
+                <p class="topbar-subtitle">LEAGUE HONORS</p>
+                <label class="season-picker" for="seasonSelect">
+                  <select id="seasonSelect"></select>
+                </label>
+              </div>
+              <div class="topbar-updated">
+                <span class="stat-label">Updated</span>
+                <span id="lastUpdatedText" class="updated-text">--</span>
+              </div>
             </div>
-          </div>
-        </div>
-
-        <div class="topbar-controls">
-          <label class="season-picker" for="seasonSelect">
-            <span>Season</span>
-            <select id="seasonSelect"></select>
-          </label>
-          <div class="topbar-updated">
-            <span class="stat-label">Updated</span>
-            <span id="lastUpdatedText" class="updated-text">--</span>
           </div>
         </div>
       </header>

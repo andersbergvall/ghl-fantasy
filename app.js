@@ -324,7 +324,9 @@ function renderTrophies(seasonKey) {
     { key: "postseason", label: "Playoffs" },
   ];
 
-  seasonTitle.textContent = seasonKey;
+  if (seasonTitle) {
+    seasonTitle.textContent = seasonKey;
+  }
   if (lastUpdatedText) {
     const rawUpdated = seasonData.lastupdate || seasonData.lastupdated || "--";
     lastUpdatedText.textContent = rawUpdated && rawUpdated !== "--" ? `${rawUpdated} CET` : "--";

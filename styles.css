@@ -46,7 +46,7 @@ body {
 .topbar {
   display: flex;
   align-items: stretch;
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: 18px;
   padding: 12px 14px;
   border: 1px solid var(--line);
@@ -63,15 +63,6 @@ body {
   gap: 20px;
   min-width: 0;
   flex: 1;
-}
-
-.topbar-controls {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 6px;
-  min-height: 100%;
 }
 
 .brand-wrap {
@@ -96,7 +87,7 @@ body {
   display: flex;
   flex-direction: column;
   justify-content: center;
-  gap: 8px;
+  gap: 6px;
   min-height: 100%;
 }
 
@@ -136,6 +127,13 @@ h2 {
   font-weight: 700;
   letter-spacing: 0.01em;
   line-height: 1.1;
+  text-transform: uppercase;
+}
+
+.topbar-subtitle-row {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 10px;
 }
 
 .topbar-season {
@@ -148,9 +146,8 @@ h2 {
 
 .season-picker {
   display: inline-flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 2px;
+  align-items: baseline;
+  gap: 0;
   background: transparent;
   border: none;
   border-radius: 0;
@@ -168,15 +165,19 @@ h2 {
 }
 
 select {
+  appearance: none;
   border: none;
   background: transparent;
   color: #6bd3ff;
   font: inherit;
-  font-size: 0.76rem;
+  font-size: 1rem;
   font-weight: 600;
+  line-height: 1.1;
   outline: none;
   min-width: 96px;
-  text-align: right;
+  margin: 0;
+  padding: 0;
+  text-align: left;
 }
 
 .dashboard {
@@ -194,17 +195,23 @@ select {
 }
 
 .topbar-updated {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 2px;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
   min-width: 0;
+}
+
+.topbar-updated .stat-label,
+.season-picker span {
+  margin-bottom: 0;
+  line-height: 1.1;
 }
 
 .updated-text {
   color: #6bd3ff;
   font-size: 0.76rem;
   font-weight: 600;
+  line-height: 1.1;
   letter-spacing: 0.01em;
   white-space: nowrap;
 }
@@ -600,13 +607,6 @@ select {
     gap: 8px;
   }
 
-  .topbar-controls {
-    width: 100%;
-    align-items: flex-end;
-    justify-content: space-between;
-    gap: 8px;
-  }
-
   .dashboard-layout {
     display: flex;
     padding-left: 0;
@@ -614,7 +614,7 @@ select {
   }
 
   .topbar-updated {
-    align-items: flex-end;
+    align-items: center;
   }
 
   .brand-mark {
