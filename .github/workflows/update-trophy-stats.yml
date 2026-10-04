@@ -3,7 +3,7 @@ name: Update Trophy Stats
 on:
   workflow_dispatch:
   schedule:
-    - cron: "0 7 * * *"
+    - cron: "0 6 * * *"
 
 jobs:
   update:
@@ -25,6 +25,7 @@ jobs:
         env:
           PUBLISH_TO_JSONBIN: "true"
           FANTRAX_LEAGUE_ID: ${{ secrets.FANTRAX_LEAGUE_ID }}
+          WEEKS_IN_SEASON: ${{ vars.WEEKS_IN_SEASON || 22 }}
           GHLTROPHYTRACKER_BIN_ID: ${{ secrets.GHLTROPHYTRACKER_BIN_ID }}
           JSONBINIO_X_MASTER_KEY: ${{ secrets.JSONBINIO_X_MASTER_KEY }}
           JSONBINIO_X_ACCESS_KEY: ${{ secrets.JSONBINIO_X_ACCESS_KEY }}

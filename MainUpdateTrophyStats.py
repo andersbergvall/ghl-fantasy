@@ -22,10 +22,13 @@ FANTALYTICS_FRENZY_CSV = PROJECT_ROOT / "FantalyticsFrenzy.csv"
 
 DEFAULT_LEAGUE_ID = "aer4wi7rmtgxmer0"
 FANTRAX_PLAYER_STATS_URL = "https://www.fantrax.com/fxpa/downloadPlayerStats"
+FANTRAX_STANDINGS_URL = "https://www.fantrax.com/fxpa/downloadStandings"
 REQUIRED_COOKIE_KEYS = ("__cf_bm", "cf_clearance", "FX_RM", "JSESSIONID")
 
 _PLAYER_STATS_DF_CACHE: pd.DataFrame | None = None
 _PLAYER_STATS_BY_ID_CACHE: Dict[str, Dict[str, Any]] | None = None
+_STANDINGS_TABLES_CACHE: Dict[str, pd.DataFrame] | None = None
+_SCHEDULE_TABLES_CACHE: Dict[str, pd.DataFrame] | None = None
 DEFAULT_ENV_PATH = Path(r"C:\Users\sweabe\Dropbox\Desktop\GHL\env.txt")
 
 STAT_CATEGORIES = [
@@ -85,73 +88,265 @@ def normalize_fantrax_text(value: Any) -> Any:
     return normalized.strip()
 
 
-def getMatchupScores(league_id: str, reg_season_periods: int = 22) -> Dict[str, Dict[str, Any]]:
-    """Loop through every regular-season period and aggregate category totals per team.
+def get_weeks_in_season() -> int:
+    """Read the league season-week count from the environment, defaulting to 22."""
+    raw_value = os.getenv("WEEKS_IN_SEASON", "22").strip()
+    try:
+        return max(1, int(float(raw_value)))
+    except (TypeError, ValueError):
+        return 22
 
-    Returns a dictionary keyed by team name. Each team entry includes the team id, score,
-    games played, and cumulative totals for every stat category. If a period returns empty
-    data, the loop breaks early.
+
+def normalize_team_name(value: Any) -> str:
+    """Normalize Fantrax team labels so they can be aligned across CSV tables."""
+    if value is None:
+        return ""
+    return normalize_fantrax_text(str(value)).strip()
+
+
+def _get_team_column_name(df: pd.DataFrame) -> str | None:
+    """Return the team-name column in a standings frame, if present."""
+    for column in df.columns:
+        cleaned = normalize_fantrax_text(str(column)).strip().lower()
+        if cleaned in {"team", "team name", "name"}:
+            return str(column)
+    return None
+
+
+def _coerce_numeric(value: Any) -> float:
+    """Convert CSV values to float while tolerating blanks and symbols."""
+    if value is None or (isinstance(value, str) and not value.strip()):
+        return 0.0
+    if isinstance(value, (int, float)):
+        return float(value)
+    cleaned = str(value).strip().replace(",", "")
+    if cleaned in {"", "-", "--", "nan", "NaN"}:
+        return 0.0
+    try:
+        return float(cleaned)
+    except ValueError:
+        return 0.0
+
+
+def build_detailed_team_table(skater_df: pd.DataFrame, goalie_df: pd.DataFrame) -> pd.DataFrame:
+    """Merge skater and goalie standings by team, summing overlapping numeric columns."""
+    if skater_df.empty and goalie_df.empty:
+        return pd.DataFrame()
+
+    left_df = skater_df.copy()
+    right_df = goalie_df.copy()
+
+    for frame in (left_df, right_df):
+        frame.columns = [normalize_fantrax_text(str(column)).strip() for column in frame.columns]
+
+    left_team_col = _get_team_column_name(left_df)
+    right_team_col = _get_team_column_name(right_df)
+    if left_team_col is None or right_team_col is None:
+        return pd.DataFrame()
+
+    left_df = left_df.rename(columns={left_team_col: "Team"})
+    right_df = right_df.rename(columns={right_team_col: "Team"})
+    left_df["Team"] = left_df["Team"].map(normalize_team_name)
+    right_df["Team"] = right_df["Team"].map(normalize_team_name)
+
+    merged = left_df.merge(right_df, on="Team", how="outer", suffixes=("_skaters", "_goalies"))
+    overlap_cols = sorted(set(left_df.columns) & set(right_df.columns) - {"Team"})
+    for column_name in overlap_cols:
+        if column_name == "Team":
+            continue
+        skater_series = pd.to_numeric(merged.get(f"{column_name}_skaters", 0), errors="coerce").fillna(0)
+        goalie_series = pd.to_numeric(merged.get(f"{column_name}_goalies", 0), errors="coerce").fillna(0)
+        merged[column_name] = skater_series + goalie_series
+        merged = merged.drop(columns=[f"{column_name}_skaters", f"{column_name}_goalies"], errors="ignore")
+
+    # Keep any non-overlapping columns from either side, but drop duplicate suffix-only entries.
+    merged = merged.sort_values("Team", kind="mergesort").reset_index(drop=True)
+    return merged
+
+
+def download_standings_tables(
+    league_id: str = DEFAULT_LEAGUE_ID,
+    weeks_in_season: int | None = None,
+    force_refresh: bool = False,
+) -> Dict[str, pd.DataFrame]:
+    """Download the standings CSV export and split it into Fantrax table frames."""
+    global _STANDINGS_TABLES_CACHE
+
+    if _STANDINGS_TABLES_CACHE is not None and not force_refresh:
+        return _STANDINGS_TABLES_CACHE
+
+    load_env_file()
+    season_weeks = weeks_in_season if weeks_in_season is not None else get_weeks_in_season()
+
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+        "Referer": "https://www.fantrax.com/",
+        "Accept": "text/csv,application/json,text/plain,*/*",
+    }
+
+    cookie_header = build_cookie_header()
+    if cookie_header:
+        headers["Cookie"] = cookie_header
+
+    response = requests.get(
+        FANTRAX_STANDINGS_URL,
+        params={
+            "leagueId": league_id,
+            "hideGoBackDays": "true",
+            "period": season_weeks,
+            "timeStartType": "FROM_SEASON_START",
+            "timeframeType": "BY_PERIOD",
+            "view": "SEASON_STATS",
+            "pageNumber": 1,
+        },
+        headers=headers,
+        timeout=30,
+    )
+    response.raise_for_status()
+
+    csv_text = response.text or ""
+    if not csv_text.strip():
+        raise ValueError("Fantrax standings export returned an empty response.")
+
+    tables = parse_fantrax_standings_csv(csv_text)
+    if not tables:
+        raise ValueError("Fantrax standings export did not include any parseable tables.")
+
+    _STANDINGS_TABLES_CACHE = tables
+    return _STANDINGS_TABLES_CACHE
+
+
+def parse_fantrax_standings_csv(csv_text: str) -> Dict[str, pd.DataFrame]:
+    """Split a two-dimensional CSV export into table-name keyed dataframes.
+
+    Some Fantrax exports do not include a table title row, so if no named tables are found we
+    fall back to a single dataframe keyed as "Schedule" or "Standings".
     """
-    url = "https://www.fantrax.com/fxea/general/getMatchupScores"
-    value_based_stats = {"Goals", "Plus/Minus", "Penalty Minutes"}
-    teams: Dict[str, Dict[str, Any]] = {}
+    rows = list(csv.reader(io.StringIO(csv_text)))
+    if not rows:
+        return {}
 
-    for period in range(1, reg_season_periods + 1):
-        response = requests.get(url, params={"leagueId": league_id, "period": period}, timeout=30)
-        response.raise_for_status()
-        data = response.json()
+    tables: Dict[str, pd.DataFrame] = {}
+    current_table_name: str | None = None
+    current_rows: List[List[str]] = []
 
-        matchups = data.get("matchups") if isinstance(data, dict) else None
-        if not matchups:
-            break
+    def flush_current_table() -> None:
+        nonlocal current_table_name, current_rows
+        if current_table_name is None or not current_rows:
+            return
 
-        for matchup in matchups:
-            if not isinstance(matchup, dict):
+        table_io = io.StringIO()
+        writer = csv.writer(table_io)
+        writer.writerows(current_rows)
+        table_io.seek(0)
+
+        dataframe = pd.read_csv(table_io)
+        if dataframe.empty:
+            return
+
+        dataframe.columns = [normalize_fantrax_text(str(column)).strip() for column in dataframe.columns]
+        dataframe = dataframe.fillna("")
+        tables[current_table_name] = dataframe
+
+        current_table_name = None
+        current_rows = []
+
+    for row in rows:
+        if not row or all(not str(cell).strip() for cell in row):
+            flush_current_table()
+            continue
+
+        first_cell = normalize_fantrax_text(row[0]).strip()
+        normalized_first = first_cell.lower()
+        known_markers = [
+            "standings",
+            "standings - statistics - skaters",
+            "standings - statistics - goalies",
+            "standings - points - skaters",
+            "standings - points - goalies",
+            "schedule",
+        ]
+        if normalized_first in known_markers or "standings" in normalized_first or "schedule" in normalized_first:
+            flush_current_table()
+            current_table_name = first_cell
+            current_rows = []
+            continue
+
+        if current_table_name is not None:
+            current_rows.append(row)
+
+    flush_current_table()
+
+    if tables:
+        return tables
+
+    if "scoring period" in csv_text.lower() or ("away" in csv_text.lower() and "home" in csv_text.lower()):
+        rows = [row for row in csv.reader(io.StringIO(csv_text)) if row and any(str(cell).strip() for cell in row)]
+        data_rows = []
+        for row in rows:
+            if len(row) < 4:
                 continue
+            first_value = normalize_fantrax_text(row[0]).lower()
+            if first_value.startswith("scoring period"):
+                continue
+            if first_value in {"away", "home", "team", "name"} and normalize_fantrax_text(row[1]).lower() == "fpts":
+                continue
+            data_rows.append(row)
+        if not data_rows:
+            return {}
+        tables["Schedule"] = pd.DataFrame(data_rows).fillna("")
+        return tables
 
-            for side in ("away", "home"):
-                team = matchup.get(side)
-                if not isinstance(team, dict):
-                    continue
+    fallback_df = pd.read_csv(io.StringIO(csv_text))
+    if fallback_df.empty:
+        return {}
 
-                team_name = normalize_fantrax_text(team.get("teamName"))
-                team_id = team.get("teamId")
-                if not team_name:
-                    continue
+    fallback_name = "Schedule" if "schedule" in csv_text.lower() else "Standings"
+    tables[fallback_name] = fallback_df.fillna("")
+    return tables
 
-                if team_name not in teams:
-                    teams[team_name] = {
-                        "teamId": team_id,
-                        "score": 0.0,
-                        "gamesPlayed": 0,
-                        "NorrisPoints": 0.0,
-                        **{category: 0.0 for category in STAT_CATEGORIES},
-                    }
-                elif team_id and teams[team_name]["teamId"] is None:
-                    teams[team_name]["teamId"] = team_id
 
-                teams[team_name]["score"] = float(teams[team_name].get("score", 0.0)) + float(team.get("score", 0.0))
-                teams[team_name]["gamesPlayed"] = int(teams[team_name].get("gamesPlayed", 0)) + int(team.get("gamesPlayed", 0))
+def getMatchupScores(league_id: str, reg_season_periods: int = 22) -> Dict[str, Dict[str, Any]]:
+    """Use the standings CSV export as the source of truth for team totals and season scores."""
+    standings_tables = download_standings_tables(league_id=league_id, weeks_in_season=reg_season_periods)
+    standings_df = standings_tables.get("Standings", pd.DataFrame())
+    if standings_df.empty:
+        return {}
 
-                for category in matchup.get("categories", []):
-                    if not isinstance(category, dict):
-                        continue
+    teams: Dict[str, Dict[str, Any]] = {}
+    for _, row in standings_df.iterrows():
+        team_name = normalize_team_name(row.get("Team") or row.get("team") or row.get("Name") or row.get("name"))
+        if not team_name:
+            continue
 
-                    stat_name = category.get("name")
-                    if stat_name not in STAT_CATEGORIES:
-                        continue
+        def team_value(column: str, default: float = 0.0) -> float:
+            return _coerce_numeric(row.get(column, default))
 
-                    stat_values = category.get(side)
-                    if not isinstance(stat_values, dict):
-                        continue
-
-                    if stat_name == "Points":
-                        norris_points = float(stat_values.get("points", 0.0)) * 100.0
-                        teams[team_name]["NorrisPoints"] = float(teams[team_name].get("NorrisPoints", 0.0)) + norris_points
-
-                    stat_metric = "value" if stat_name in value_based_stats else "points"
-                    stat_amount = stat_values.get(stat_metric, 0.0)
-                    teams[team_name][stat_name] = float(teams[team_name].get(stat_name, 0.0)) + float(stat_amount)
+        team_entry = {
+            "teamId": None,
+            "score": team_value("FPts", 0.0),
+            "gamesPlayed": int(team_value("GP", 0.0)),
+            "NorrisPoints": team_value("Pt", 0.0) * 100.0,
+            "Goals": team_value("G", 0.0),
+            "Assists": team_value("A", 0.0),
+            "Points": team_value("Pt", 0.0),
+            "Plus/Minus": team_value("+/-", 0.0),
+            "Penalty Minutes": team_value("PIM", 0.0),
+            "Shots on Goal": team_value("SOG", 0.0),
+            "Power Play Goals": team_value("PPG", 0.0),
+            "Short-Handed Goals": team_value("SHG", 0.0),
+            "Game-winning Goals": team_value("GWG", 0.0),
+            "Hits": team_value("Hits", 0.0),
+            "Power Play Assists": team_value("PPA", 0.0),
+            "Short-Handed Assists": team_value("SHA", 0.0),
+            "Blocks": team_value("Blk", 0.0),
+            "Wins (Goalies only)": team_value("W", 0.0),
+            "Shutouts": team_value("SO", 0.0),
+            "Goals Against": team_value("GA", 0.0),
+            "Saves": team_value("SV", 0.0),
+            "Overtime Losses + Shootout Losses": team_value("OTL", 0.0) + team_value("SOL", 0.0),
+        }
+        teams[team_name] = team_entry
 
     return teams
 
@@ -189,6 +384,120 @@ def getTeamTopPeriodScore(league_id: str, reg_season_periods: int = 22) -> Dict[
                     best_by_team[team_name] = team_score
 
     return best_by_team
+
+
+def download_schedule_tables(
+    league_id: str = DEFAULT_LEAGUE_ID,
+    weeks_in_season: int | None = None,
+    force_refresh: bool = False,
+) -> Dict[str, pd.DataFrame]:
+    """Download the SCHEDULE CSV export and split it into table frames."""
+    global _SCHEDULE_TABLES_CACHE
+
+    if _SCHEDULE_TABLES_CACHE is not None and not force_refresh:
+        return _SCHEDULE_TABLES_CACHE
+
+    load_env_file()
+    season_weeks = weeks_in_season if weeks_in_season is not None else get_weeks_in_season()
+
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+        "Referer": "https://www.fantrax.com/",
+        "Accept": "text/csv,application/json,text/plain,*/*",
+    }
+
+    cookie_header = build_cookie_header()
+    if cookie_header:
+        headers["Cookie"] = cookie_header
+
+    response = requests.get(
+        FANTRAX_STANDINGS_URL,
+        params={
+            "leagueId": league_id,
+            "view": "SCHEDULE",
+            "timeframeType": "YEAR_TO_DATE",
+            "period": season_weeks,
+            "timeStartType": "FROM_SEASON_START",
+            "hideGoBackDays": "true",
+            "pageNumber": 1,
+        },
+        headers=headers,
+        timeout=30,
+    )
+    response.raise_for_status()
+
+    csv_text = response.text or ""
+    if not csv_text.strip():
+        raise ValueError("Fantrax schedule export returned an empty response.")
+
+    tables = parse_fantrax_standings_csv(csv_text)
+    if not tables:
+        raise ValueError("Fantrax schedule export did not include any parseable tables.")
+
+    _SCHEDULE_TABLES_CACHE = tables
+    return _SCHEDULE_TABLES_CACHE
+
+
+def get_vegas_baby_schedule_leaderboard(
+    league_id: str = DEFAULT_LEAGUE_ID,
+    weeks_in_season: int | None = None,
+    force_refresh: bool = False,
+) -> Dict[str, float]:
+    """Return the top 12 weekly team scores from the Fantrax SCHEDULE CSV export.
+
+    The schedule CSV is arranged as rows like:
+      Away,FPts,Home,FPts
+      TeamA,170.96,TeamB,135.79
+    so each row is a pair of team/score entries. We flatten each row into team-score pairs,
+    then sort the full list descending and keep the top 12.
+    """
+    tables = download_schedule_tables(league_id=league_id, weeks_in_season=weeks_in_season, force_refresh=force_refresh)
+    weekly_scores: List[tuple[str, float]] = []
+
+    def add_score(team_name: Any, score: Any) -> None:
+        if team_name is None:
+            return
+        cleaned_team = normalize_team_name(team_name)
+        if not cleaned_team:
+            return
+        try:
+            numeric_score = float(score)
+        except (TypeError, ValueError):
+            return
+        weekly_scores.append((cleaned_team, numeric_score))
+
+    for frame in tables.values():
+        if frame.empty:
+            continue
+
+        for row in frame.values.tolist():
+            cleaned_row = [normalize_fantrax_text(str(cell)).strip() for cell in row if cell is not None]
+            cleaned_row = [cell for cell in cleaned_row if cell]
+            if len(cleaned_row) < 4:
+                continue
+
+            first_value = cleaned_row[0].lower()
+            if first_value in {"away", "home", "team", "scoring period"} or first_value.startswith("scoring period"):
+                continue
+
+            for offset in (0, 2):
+                if offset + 1 >= len(cleaned_row):
+                    continue
+                team_value = cleaned_row[offset]
+                score_value = cleaned_row[offset + 1]
+                if team_value.lower() in {"away", "home", "team", "name"}:
+                    continue
+                try:
+                    float(score_value)
+                except ValueError:
+                    continue
+                add_score(team_value, score_value)
+
+    if not weekly_scores:
+        return {}
+
+    ranked = sorted(weekly_scores, key=lambda item: float(item[1]), reverse=True)[:12]
+    return {team_name: round(float(score), 2) for team_name, score in ranked}
 
 
 def normalize_player_id(value: Any) -> str:
@@ -576,12 +885,84 @@ def get_fantalytics_frenzy_leaderboard(teams: Dict[str, Dict[str, Any]]) -> Dict
     }
 
 
+def get_backs_backe_back_to_back_leaderboard(
+    league_id: str = DEFAULT_LEAGUE_ID,
+    weeks_in_season: int | None = None,
+) -> Dict[str, str]:
+    """Return the midpoint combined standings as team -> W-L-T mapping."""
+    load_env_file()
+    season_weeks = weeks_in_season if weeks_in_season is not None else get_weeks_in_season()
+    period = max(1, math.ceil(float(season_weeks) / 2.0))
+
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+        "Referer": "https://www.fantrax.com/",
+        "Accept": "text/csv,application/json,text/plain,*/*",
+    }
+
+    cookie_header = build_cookie_header()
+    if cookie_header:
+        headers["Cookie"] = cookie_header
+
+    response = requests.get(
+        FANTRAX_STANDINGS_URL,
+        params={
+            "leagueId": league_id,
+            "view": "COMBINED",
+            "timeframeType": "BY_PERIOD",
+            "period": period,
+            "timeStartType": "FROM_SEASON_START",
+            "hideGoBackDays": "true",
+            "pageNumber": 1,
+        },
+        headers=headers,
+        timeout=30,
+    )
+    response.raise_for_status()
+
+    csv_text = response.text or ""
+    if not csv_text.strip():
+        return {}
+
+    tables = parse_fantrax_standings_csv(csv_text)
+    standings_df = tables.get("Standings", pd.DataFrame())
+    if standings_df.empty:
+        return {}
+
+    normalized_columns = {
+        normalize_fantrax_text(str(column)).strip().lower(): str(column)
+        for column in standings_df.columns
+    }
+
+    team_key = normalized_columns.get("team") or normalized_columns.get("team name") or normalized_columns.get("name")
+    w_key = normalized_columns.get("w")
+    l_key = normalized_columns.get("l")
+    t_key = normalized_columns.get("t")
+
+    if team_key is None or not all(key for key in (w_key, l_key, t_key)):
+        return {}
+
+    results: Dict[str, str] = {}
+    for _, row in standings_df.iterrows():
+        team_name = normalize_team_name(row.get(team_key, ""))
+        if not team_name:
+            continue
+
+        w_value = _coerce_numeric(row.get(w_key, 0))
+        l_value = _coerce_numeric(row.get(l_key, 0))
+        t_value = _coerce_numeric(row.get(t_key, 0))
+        results[team_name] = f"{int(w_value)}-{int(l_value)}-{int(t_value)}"
+
+    return results
+
+
 def buildSeasonTrophyJson(
     teams: Dict[str, Dict[str, Any]],
     period_leaderboard: Dict[str, float] | None = None,
     league_id: str = DEFAULT_LEAGUE_ID,
+    standings_tables: Dict[str, pd.DataFrame] | None = None,
 ) -> Dict[str, Dict[str, Dict[str, float]]]:
-    """Create the final season/trophy JSON with descending/ascending ordering based on the stat metric."""
+    """Create the final season/trophy JSON with standings CSV-based overrides and legacy fallbacks."""
 
     def ordinal_day(day: int) -> str:
         if 10 <= day % 100 <= 20:
@@ -594,6 +975,62 @@ def buildSeasonTrophyJson(
         dt = __import__("datetime").datetime.utcnow() + __import__("datetime").timedelta(hours=2)
         return dt.strftime(f"%B {ordinal_day(dt.day)} %Y, %H:%M")
 
+    def find_team_column(frame: pd.DataFrame) -> str | None:
+        for column in frame.columns:
+            normalized = normalize_fantrax_text(str(column)).strip().lower()
+            if normalized in {"team", "team name", "name"}:
+                return str(column)
+        return None
+
+    def team_name_from_frame(frame: pd.DataFrame, row: pd.Series) -> str:
+        team_column = find_team_column(frame)
+        if team_column is None:
+            return ""
+        return normalize_team_name(row.get(team_column, ""))
+
+    def leaderboard_from_frame(
+        frame: pd.DataFrame,
+        metric: str,
+        descending: bool = True,
+        value_transform: Any | None = None,
+        fallback_metric: str | None = None,
+    ) -> Dict[str, float]:
+        if frame.empty:
+            return {}
+
+        metric_key = metric if metric in frame.columns else (fallback_metric if fallback_metric and fallback_metric in frame.columns else None)
+        if metric_key is None:
+            return {}
+
+        dataset: List[Dict[str, Any]] = []
+        for _, row in frame.iterrows():
+            team_name = team_name_from_frame(frame, row)
+            if not team_name:
+                continue
+            raw_value = row.get(metric_key, 0)
+            value = _coerce_numeric(raw_value)
+            if value_transform is not None:
+                value = value_transform(value)
+            dataset.append({"Team": team_name, "Value": value})
+
+        if not dataset:
+            return {}
+
+        ordered = sorted(dataset, key=lambda item: float(item["Value"]), reverse=descending)
+        return {item["Team"]: round(float(item["Value"]), 2) for item in ordered}
+
+    custom_tables = standings_tables or download_standings_tables(league_id=league_id)
+    standings_df = custom_tables.get("Standings", pd.DataFrame())
+    stats_df = custom_tables.get("Standings - Statistics - Skaters", pd.DataFrame())
+    goals_df = custom_tables.get("Standings - Statistics - Goalies", pd.DataFrame())
+    points_skater_df = custom_tables.get("Standings - Points - Skaters", pd.DataFrame())
+    points_goalie_df = custom_tables.get("Standings - Points - Goalies", pd.DataFrame())
+
+    detailed_statistics = build_detailed_team_table(stats_df, goals_df)
+    detailed_points = build_detailed_team_table(points_skater_df, points_goalie_df)
+    custom_tables["Detailed Statistics Stats"] = detailed_statistics
+    custom_tables["Detailed Points Stats"] = detailed_points
+
     trophy_map = {
         "Art Ross": ("score", True),
         "Rocket Richard": ("Goals", True),
@@ -601,6 +1038,7 @@ def buildSeasonTrophyJson(
         "Selke": ("Plus/Minus", True),
         "Lady Byng": ("Penalty Minutes", False),
         "Jim Gregory": ("gamesPlayed", True),
+        "Vezina": ("Goal", True),
     }
     integer_trophies = {"Rocket Richard", "Norris", "Selke", "Lady Byng", "Jim Gregory"}
 
@@ -610,9 +1048,24 @@ def buildSeasonTrophyJson(
             return int(round(numeric))
         return numeric
 
+    custom_trophies = {
+        "Art Ross": leaderboard_from_frame(standings_df, "FPts", descending=True),
+        "Rocket Richard": leaderboard_from_frame(detailed_statistics, "G", descending=True),
+        "Norris": leaderboard_from_frame(detailed_points, "Pt", descending=True, value_transform=lambda value: float(value) * 100.0),
+        "Selke": leaderboard_from_frame(detailed_statistics, "+/-", descending=True),
+        "Lady Byng": leaderboard_from_frame(detailed_statistics, "PIM", descending=False),
+        "Jim Gregory": leaderboard_from_frame(standings_df, "GP", descending=True),
+        "Vezina": leaderboard_from_frame(standings_df, "Goal", descending=True, fallback_metric="G"),
+    }
+
     def build_trophy_bucket() -> Dict[str, Dict[str, float]]:
         trophies: Dict[str, Dict[str, float]] = {}
         for trophy_name, (metric, descending) in trophy_map.items():
+            override_values = custom_trophies.get(trophy_name)
+            if override_values:
+                trophies[trophy_name] = {team_name: round(float(value), 2) for team_name, value in override_values.items()}
+                continue
+
             ordered = sorted(
                 teams.items(),
                 key=lambda item: float(format_trophy_value(trophy_name, item[1].get(metric, 0.0))),
@@ -627,15 +1080,20 @@ def buildSeasonTrophyJson(
     def placeholder_entry(value: str = "Winner/Leader TBD") -> Dict[str, int]:
         return {value: 99}
 
-    vegas_baby_leaderboard = {
-        team_name: float(score)
-        for team_name, score in sorted((period_leaderboard or {}).items(), key=lambda item: float(item[1]), reverse=True)
-    }
+    vegas_baby_leaderboard = get_vegas_baby_schedule_leaderboard(
+        league_id=league_id,
+        weeks_in_season=get_weeks_in_season(),
+    )
+    if not vegas_baby_leaderboard:
+        vegas_baby_leaderboard = {
+            team_name: float(score)
+            for team_name, score in sorted((period_leaderboard or {}).items(), key=lambda item: float(item[1]), reverse=True)
+        }
 
     season_data: Dict[str, Any] = {}
     season_key = "2026-2027"
 
-    player_stats_by_id = get_player_stats_by_id(league_id=league_id, transaction_period=22)
+    player_stats_by_id = get_player_stats_by_id(league_id=league_id, transaction_period=get_weeks_in_season())
     scout_honor_scores = get_scouts_honor_leaderboard(player_stats_by_id=player_stats_by_id)
 
     season_data[season_key] = {
@@ -644,7 +1102,6 @@ def buildSeasonTrophyJson(
             "trophies": {
                 "Hart": get_hart_leaderboard(player_stats_by_id=player_stats_by_id),
                 **build_trophy_bucket(),
-                "Vezina": placeholder_entry(),
                 "Calder": get_calder_leaderboard(player_stats_by_id=player_stats_by_id),
                 "Jack Adams": get_jack_adams_leaderboard(teams, scout_honor_scores),
             },
@@ -654,7 +1111,10 @@ def buildSeasonTrophyJson(
             },
             "bounties": {
                 "It's Vegas Baby!": vegas_baby_leaderboard,
-                "Back's Backe Back-2-Back": placeholder_entry(),
+                "Back's Backe Back-2-Back": get_backs_backe_back_to_back_leaderboard(
+                    league_id=league_id,
+                    weeks_in_season=get_weeks_in_season(),
+                ),
             },
         },
         "postseason": {
@@ -755,12 +1215,20 @@ def patch_jsonbin_trophies(payload: Dict[str, Any], env_path: str | None = None)
 if __name__ == "__main__":
     load_env_file()
     league_id = os.getenv("FANTRAX_LEAGUE_ID", DEFAULT_LEAGUE_ID)
-    results = getMatchupScores(league_id=league_id, reg_season_periods=22)
-    vegas_baby_board = getTeamTopPeriodScore(league_id=league_id, reg_season_periods=22)
-    final_json = buildSeasonTrophyJson(results, period_leaderboard=vegas_baby_board, league_id=league_id)
+    season_weeks = get_weeks_in_season()
+    standings_tables = download_standings_tables(league_id=league_id, weeks_in_season=season_weeks)
+    results = getMatchupScores(league_id=league_id, reg_season_periods=season_weeks)
+    vegas_baby_board = get_vegas_baby_schedule_leaderboard(league_id=league_id, weeks_in_season=season_weeks)
+    final_json = buildSeasonTrophyJson(
+        results,
+        period_leaderboard=vegas_baby_board,
+        league_id=league_id,
+        standings_tables=standings_tables,
+    )
 #    print(json.dumps(final_json, ensure_ascii=False, indent=2))
 
     should_publish = os.getenv("PUBLISH_TO_JSONBIN", "0").strip().lower() in {"1", "true", "yes", "on"}
+    should_publish = "true"
     if should_publish:
         try:
             patch_result = patch_jsonbin_trophies(final_json)
