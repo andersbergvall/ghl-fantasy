@@ -1228,7 +1228,7 @@ if __name__ == "__main__":
 #    print(json.dumps(final_json, ensure_ascii=False, indent=2))
 
     should_publish = os.getenv("PUBLISH_TO_JSONBIN", "0").strip().lower() in {"1", "true", "yes", "on"}
-    should_publish = "true"
+#    should_publish = "true"
     if should_publish:
         try:
             patch_result = patch_jsonbin_trophies(final_json)
