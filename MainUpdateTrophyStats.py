@@ -8,9 +8,11 @@ import io
 import json
 import math
 import os
+import subprocess
 from pathlib import Path
 from typing import Any, Dict, List
 
+import re
 import pandas as pd
 import requests
 
@@ -19,10 +21,15 @@ PROJECT_ROOT = Path(__file__).resolve().parent
 DRAFT_RESULTS_CSV = PROJECT_ROOT / "DraftResults.csv"
 CALDER_CANDIDATES_CSV = PROJECT_ROOT / "CalderCandidates.csv"
 FANTALYTICS_FRENZY_CSV = PROJECT_ROOT / "FantalyticsFrenzy.csv"
+TROPHY_DATA_JSON = PROJECT_ROOT / "trophy-data.json"
+TROPHY_DATA_JS = PROJECT_ROOT / "trophy-data.js"
+MATCHUP_DATA_JSON = PROJECT_ROOT / "matchup-data.json"
+MATCHUP_DATA_JS = PROJECT_ROOT / "matchup-data.js"
 
 DEFAULT_LEAGUE_ID = "aer4wi7rmtgxmer0"
 FANTRAX_PLAYER_STATS_URL = "https://www.fantrax.com/fxpa/downloadPlayerStats"
 FANTRAX_STANDINGS_URL = "https://www.fantrax.com/fxpa/downloadStandings"
+FANTRAX_MATCHUP_SCORES_URL = "https://www.fantrax.com/fxea/general/getMatchupScores"
 REQUIRED_COOKIE_KEYS = ("__cf_bm", "cf_clearance", "FX_RM", "JSESSIONID")
 
 _PLAYER_STATS_DF_CACHE: pd.DataFrame | None = None
@@ -266,6 +273,12 @@ def parse_fantrax_standings_csv(csv_text: str) -> Dict[str, pd.DataFrame]:
             "standings - points - goalies",
             "schedule",
         ]
+        if normalized_first.startswith("scoring period"):
+            flush_current_table()
+            current_table_name = first_cell
+            current_rows = []
+            continue
+
         if normalized_first in known_markers or "standings" in normalized_first or "schedule" in normalized_first:
             flush_current_table()
             current_table_name = first_cell
@@ -386,6 +399,146 @@ def getTeamTopPeriodScore(league_id: str, reg_season_periods: int = 22) -> Dict[
     return best_by_team
 
 
+def _normalized_stat_key(value: Any) -> str:
+    return re.sub(r"[^a-z0-9]", "", str(value).strip().lower())
+
+
+def _extract_numeric_stat(payload: Any, aliases: List[str]) -> float:
+    normalized_aliases = {_normalized_stat_key(alias) for alias in aliases}
+    stack: List[Any] = [payload]
+
+    while stack:
+        node = stack.pop()
+        if isinstance(node, dict):
+            for key, value in node.items():
+                if _normalized_stat_key(key) in normalized_aliases:
+                    numeric = _coerce_numeric(value)
+                    if numeric != 0.0:
+                        return numeric
+                if isinstance(value, (dict, list)):
+                    stack.append(value)
+        elif isinstance(node, list):
+            stack.extend(node)
+
+    return 0.0
+
+
+def build_matchup_data_json(
+    league_id: str = DEFAULT_LEAGUE_ID,
+    weeks_in_season: int | None = None,
+    season_key: str = "2026-2027",
+) -> Dict[str, Any]:
+    """Build matchup-by-matchup team metrics from the Fantrax getMatchupScores endpoint."""
+    load_env_file()
+    season_weeks = weeks_in_season if weeks_in_season is not None else get_weeks_in_season()
+
+    cumulative: Dict[str, Dict[str, float]] = {}
+    matchup_payload: Dict[str, List[Dict[str, Any]]] = {}
+
+    for period in range(1, season_weeks + 1):
+        response = requests.get(
+            FANTRAX_MATCHUP_SCORES_URL,
+            params={"leagueId": league_id, "period": period},
+            timeout=30,
+        )
+        response.raise_for_status()
+        period_data = response.json()
+
+        matchups = period_data.get("matchups") if isinstance(period_data, dict) else None
+        if not matchups:
+            break
+
+        period_has_meaningful_data = False
+
+        matchup_rows: List[Dict[str, Any]] = []
+
+        for matchup in matchups:
+            if not isinstance(matchup, dict):
+                continue
+
+            away = matchup.get("away") if isinstance(matchup.get("away"), dict) else {}
+            home = matchup.get("home") if isinstance(matchup.get("home"), dict) else {}
+            if not away or not home:
+                continue
+
+            away_name = normalize_team_name(away.get("teamName"))
+            home_name = normalize_team_name(home.get("teamName"))
+            away_score = _coerce_numeric(away.get("score"))
+            home_score = _coerce_numeric(home.get("score"))
+
+            categories = matchup.get("categories") if isinstance(matchup.get("categories"), list) else []
+            away_category_values: Dict[str, float] = {}
+            home_category_values: Dict[str, float] = {}
+            for category in categories:
+                if not isinstance(category, dict):
+                    continue
+                short_name = normalize_fantrax_text(category.get("shortName") or "")
+                short_name = str(short_name).strip().upper()
+                if not short_name:
+                    continue
+
+                away_entry = category.get("away") if isinstance(category.get("away"), dict) else {}
+                home_entry = category.get("home") if isinstance(category.get("home"), dict) else {}
+                away_value = _coerce_numeric(away_entry.get("value"))
+                home_value = _coerce_numeric(home_entry.get("value"))
+                away_category_values[short_name] = away_value
+                home_category_values[short_name] = home_value
+
+                if away_value != 0.0 or home_value != 0.0:
+                    period_has_meaningful_data = True
+
+            if away_score != 0.0 or home_score != 0.0:
+                period_has_meaningful_data = True
+
+            for team_data, category_values, team_name, team_score, opponent_name, opponent_score in (
+                (away, away_category_values, away_name, away_score, home_name, home_score),
+                (home, home_category_values, home_name, home_score, away_name, away_score),
+            ):
+                if not team_name:
+                    continue
+
+                games_played = _coerce_numeric(team_data.get("gamesPlayed")) or 1.0
+                sog = _coerce_numeric(category_values.get("SOG", 0.0))
+                goals = _coerce_numeric(category_values.get("G", 0.0))
+                saves = _coerce_numeric(category_values.get("SV", 0.0))
+                goals_against = _coerce_numeric(category_values.get("GA", 0.0))
+
+                team_cumulative = cumulative.setdefault(
+                    team_name,
+                    {"fpts": 0.0, "games": 0.0, "sog": 0.0, "goals": 0.0, "sv": 0.0, "ga": 0.0},
+                )
+                team_cumulative["fpts"] += team_score
+                team_cumulative["games"] += games_played
+                team_cumulative["sog"] += sog
+                team_cumulative["goals"] += goals
+                team_cumulative["sv"] += saves
+                team_cumulative["ga"] += goals_against
+
+                matchup_rows.append(
+                    {
+                        "Team": team_name,
+                        "FP": round(team_score, 2),
+                        "FP/G": round(team_score / games_played, 4) if games_played else 0.0,
+                        "SSN FP/G": round(team_cumulative["fpts"] / team_cumulative["games"], 4) if team_cumulative["games"] else 0.0,
+                        "SH%": round((goals / sog) * 100.0, 4) if sog else 0.0,
+                        "SSN SH%": round((team_cumulative["goals"] / team_cumulative["sog"]) * 100.0, 4) if team_cumulative["sog"] else 0.0,
+                        "SV%": round(saves / (saves + goals_against), 4) if (saves + goals_against) else 0.0,
+                        "SSN SV%": round(team_cumulative["sv"] / (team_cumulative["sv"] + team_cumulative["ga"]), 4)
+                        if (team_cumulative["sv"] + team_cumulative["ga"])
+                        else 0.0,
+                        "Opponent": opponent_name,
+                        "W/L": "W" if team_score > opponent_score else ("L" if team_score < opponent_score else "T"),
+                    }
+                )
+
+        if not period_has_meaningful_data:
+            break
+
+        matchup_payload[f"Matchup {period}"] = sorted(matchup_rows, key=lambda item: str(item.get("Team", "")).lower())
+
+    return {"season": {season_key: {"matchups": matchup_payload}}}
+
+
 def download_schedule_tables(
     league_id: str = DEFAULT_LEAGUE_ID,
     weeks_in_season: int | None = None,
@@ -442,7 +595,7 @@ def get_vegas_baby_schedule_leaderboard(
     league_id: str = DEFAULT_LEAGUE_ID,
     weeks_in_season: int | None = None,
     force_refresh: bool = False,
-) -> Dict[str, float]:
+) -> Dict[str, str]:
     """Return the top 12 weekly team scores from the Fantrax SCHEDULE CSV export.
 
     The schedule CSV is arranged as rows like:
@@ -452,9 +605,11 @@ def get_vegas_baby_schedule_leaderboard(
     then sort the full list descending and keep the top 12.
     """
     tables = download_schedule_tables(league_id=league_id, weeks_in_season=weeks_in_season, force_refresh=force_refresh)
-    weekly_scores: List[tuple[str, float]] = []
+    weekly_scores: List[tuple[str, int | None, float]] = []
 
-    def add_score(team_name: Any, score: Any) -> None:
+    scoring_period_pattern = re.compile(r"scoring period\s*(\d+)", re.IGNORECASE)
+
+    def add_score(team_name: Any, score: Any, scoring_period: int | None) -> None:
         if team_name is None:
             return
         cleaned_team = normalize_team_name(team_name)
@@ -464,20 +619,34 @@ def get_vegas_baby_schedule_leaderboard(
             numeric_score = float(score)
         except (TypeError, ValueError):
             return
-        weekly_scores.append((cleaned_team, numeric_score))
+        weekly_scores.append((cleaned_team, scoring_period, numeric_score))
 
-    for frame in tables.values():
+    for table_name, frame in tables.items():
         if frame.empty:
             continue
+
+        current_scoring_period: int | None = None
+        table_match = scoring_period_pattern.search(table_name)
+        if table_match:
+            current_scoring_period = int(table_match.group(1))
 
         for row in frame.values.tolist():
             cleaned_row = [normalize_fantrax_text(str(cell)).strip() for cell in row if cell is not None]
             cleaned_row = [cell for cell in cleaned_row if cell]
-            if len(cleaned_row) < 4:
+            if not cleaned_row:
                 continue
 
             first_value = cleaned_row[0].lower()
-            if first_value in {"away", "home", "team", "scoring period"} or first_value.startswith("scoring period"):
+            if first_value.startswith("scoring period"):
+                match = scoring_period_pattern.search(" ".join(cleaned_row))
+                if match:
+                    current_scoring_period = int(match.group(1))
+                continue
+
+            if len(cleaned_row) < 4:
+                continue
+
+            if first_value in {"away", "home", "team"}:
                 continue
 
             for offset in (0, 2):
@@ -491,13 +660,22 @@ def get_vegas_baby_schedule_leaderboard(
                     float(score_value)
                 except ValueError:
                     continue
-                add_score(team_value, score_value)
+                add_score(team_value, score_value, current_scoring_period)
 
     if not weekly_scores:
         return {}
 
-    ranked = sorted(weekly_scores, key=lambda item: float(item[1]), reverse=True)[:12]
-    return {team_name: round(float(score), 2) for team_name, score in ranked}
+    ranked = sorted(weekly_scores, key=lambda item: float(item[2]), reverse=True)[:12]
+
+    def format_score(score: float) -> str:
+        return str(int(score)) if float(score).is_integer() else f"{score:.2f}"
+
+    leaderboard: Dict[str, str] = {}
+    for team_name, scoring_period, score in ranked:
+        prefix = f"Week {scoring_period}" if scoring_period is not None else "Week ?"
+        leaderboard[team_name] = f"{prefix}: {format_score(score)}"
+
+    return leaderboard
 
 
 def normalize_player_id(value: Any) -> str:
@@ -1086,7 +1264,7 @@ def buildSeasonTrophyJson(
     )
     if not vegas_baby_leaderboard:
         vegas_baby_leaderboard = {
-            team_name: float(score)
+            team_name: f"Week ?: {score:.2f}" if isinstance(score, (int, float)) else f"Week ?: {score}"
             for team_name, score in sorted((period_leaderboard or {}).items(), key=lambda item: float(item[1]), reverse=True)
         }
 
@@ -1139,6 +1317,105 @@ def buildSeasonTrophyJson(
     }
 
     return {"season": season_data}
+
+
+def write_local_trophy_data(payload: Dict[str, Any]) -> None:
+    json_text = json.dumps(payload, ensure_ascii=False, indent=2)
+    TROPHY_DATA_JSON.write_text(json_text + "\n", encoding="utf-8")
+    TROPHY_DATA_JS.write_text(
+        "window.__GHL_TROPHY_DATA__ = " + json_text + ";\n",
+        encoding="utf-8",
+    )
+
+
+def write_local_matchup_data(payload: Dict[str, Any]) -> None:
+    json_text = json.dumps(payload, ensure_ascii=False, indent=2)
+    MATCHUP_DATA_JSON.write_text(json_text + "\n", encoding="utf-8")
+    MATCHUP_DATA_JS.write_text(
+        "window.__GHL_MATCHUP_DATA__ = " + json_text + ";\n",
+        encoding="utf-8",
+    )
+
+
+def sync_local_tracker_data_to_git() -> None:
+    """Stage, commit, and push generated snapshot files if they changed."""
+    git_add = subprocess.run(
+        [
+            "git",
+            "add",
+            str(TROPHY_DATA_JSON),
+            str(TROPHY_DATA_JS),
+            str(MATCHUP_DATA_JSON),
+            str(MATCHUP_DATA_JS),
+        ],
+        cwd=PROJECT_ROOT,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if git_add.returncode != 0:
+        raise RuntimeError((git_add.stderr or git_add.stdout or "git add failed").strip())
+
+    diff_check = subprocess.run(
+        ["git", "diff", "--cached", "--quiet"],
+        cwd=PROJECT_ROOT,
+        check=False,
+    )
+    if diff_check.returncode == 0:
+        return
+    if diff_check.returncode not in (0, 1):
+        raise RuntimeError("git diff --cached --quiet failed")
+
+    git_name = subprocess.run(
+        ["git", "config", "user.name"],
+        cwd=PROJECT_ROOT,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    git_email = subprocess.run(
+        ["git", "config", "user.email"],
+        cwd=PROJECT_ROOT,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if not git_name.stdout.strip():
+        subprocess.run(
+            ["git", "config", "user.name", os.getenv("TROPHY_TRACKER_GIT_USER_NAME", "github-actions[bot]")],
+            cwd=PROJECT_ROOT,
+            check=False,
+        )
+    if not git_email.stdout.strip():
+        subprocess.run(
+            ["git", "config", "user.email", os.getenv("TROPHY_TRACKER_GIT_USER_EMAIL", "github-actions[bot]@users.noreply.github.com")],
+            cwd=PROJECT_ROOT,
+            check=False,
+        )
+
+    commit_message = os.getenv("TROPHY_TRACKER_GIT_COMMIT_MESSAGE", "Update trophy and matchup snapshots")
+    git_commit = subprocess.run(
+        ["git", "commit", "-m", commit_message],
+        cwd=PROJECT_ROOT,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if git_commit.returncode != 0:
+        output = (git_commit.stderr or git_commit.stdout or "git commit failed").strip()
+        if "nothing to commit" in output.lower():
+            return
+        raise RuntimeError(output)
+
+    git_push = subprocess.run(
+        ["git", "push"],
+        cwd=PROJECT_ROOT,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if git_push.returncode != 0:
+        raise RuntimeError((git_push.stderr or git_push.stdout or "git push failed").strip())
 
 
 def load_env_file(path: str | None = None) -> Dict[str, str]:
@@ -1225,13 +1502,18 @@ if __name__ == "__main__":
         league_id=league_id,
         standings_tables=standings_tables,
     )
+    matchup_json = build_matchup_data_json(league_id=league_id, weeks_in_season=season_weeks, season_key="2026-2027")
+    write_local_trophy_data(final_json)
+    write_local_matchup_data(matchup_json)
+    if os.getenv("TROPHY_TRACKER_SYNC_GIT", "1").strip().lower() in {"1", "true", "yes", "on"}:
+        sync_local_tracker_data_to_git()
 #    print(json.dumps(final_json, ensure_ascii=False, indent=2))
 
-    should_publish = os.getenv("PUBLISH_TO_JSONBIN", "0").strip().lower() in {"1", "true", "yes", "on"}
+#    should_publish = os.getenv("PUBLISH_TO_JSONBIN", "0").strip().lower() in {"1", "true", "yes", "on"}
 #    should_publish = "true"
-    if should_publish:
-        try:
-            patch_result = patch_jsonbin_trophies(final_json)
-            print(json.dumps({"jsonbin": patch_result}, ensure_ascii=False, indent=2))
-        except Exception as exc:
-            raise RuntimeError(f"JSONBin publish failed: {exc}") from exc
+    # if should_publish:
+    #     try:
+    #         patch_result = patch_jsonbin_trophies(final_json)
+    #         print(json.dumps({"jsonbin": patch_result}, ensure_ascii=False, indent=2))
+    #     except Exception as exc:
+    #         raise RuntimeError(f"JSONBin publish failed: {exc}") from exc

@@ -1,0 +1,154 @@
+{
+  "season": {
+    "2026-2027": {
+      "matchups": {
+        "Matchup 1": [
+          {
+            "Team": "Bangkok Ladyboys",
+            "FP": 157.49,
+            "FP/G": 3.4998,
+            "SSN FP/G": 3.4998,
+            "SH%": 10.8108,
+            "SSN SH%": 10.8108,
+            "SV%": 0.9286,
+            "SSN SV%": 0.9286,
+            "Opponent": "Ömalm Golden Bananas",
+            "W/L": "L"
+          },
+          {
+            "Team": "Bönan Bonebreakers",
+            "FP": 162.32,
+            "FP/G": 3.8648,
+            "SSN FP/G": 3.8648,
+            "SH%": 19.2771,
+            "SSN SH%": 19.2771,
+            "SV%": 0.8851,
+            "SSN SV%": 0.8851,
+            "Opponent": "Rinkeby Runners",
+            "W/L": "W"
+          },
+          {
+            "Team": "Gävle Raiders",
+            "FP": 112.81,
+            "FP/G": 2.7515,
+            "SSN FP/G": 2.7515,
+            "SH%": 11.1111,
+            "SSN SH%": 11.1111,
+            "SV%": 0.89,
+            "SSN SV%": 0.89,
+            "Opponent": "Västermalm Frogs",
+            "W/L": "W"
+          },
+          {
+            "Team": "Hagaström Hellraisers",
+            "FP": 98.91,
+            "FP/G": 2.9973,
+            "SSN FP/G": 2.9973,
+            "SH%": 7.9365,
+            "SSN SH%": 7.9365,
+            "SV%": 0.9574,
+            "SSN SV%": 0.9574,
+            "Opponent": "Valhalla Valkyries",
+            "W/L": "L"
+          },
+          {
+            "Team": "Rinkeby Runners",
+            "FP": 115.54,
+            "FP/G": 2.687,
+            "SSN FP/G": 2.687,
+            "SH%": 8.046,
+            "SSN SH%": 8.046,
+            "SV%": 0.9103,
+            "SSN SV%": 0.9103,
+            "Opponent": "Bönan Bonebreakers",
+            "W/L": "L"
+          },
+          {
+            "Team": "Taipei 101's",
+            "FP": 158.45,
+            "FP/G": 3.6011,
+            "SSN FP/G": 3.6011,
+            "SH%": 11.828,
+            "SSN SH%": 11.828,
+            "SV%": 0.9065,
+            "SSN SV%": 0.9065,
+            "Opponent": "Tuna Tacos",
+            "W/L": "W"
+          },
+          {
+            "Team": "Tessin Bourbons",
+            "FP": 150.44,
+            "FP/G": 3.2009,
+            "SSN FP/G": 3.2009,
+            "SH%": 16.4835,
+            "SSN SH%": 16.4835,
+            "SV%": 0.8942,
+            "SSN SV%": 0.8942,
+            "Opponent": "Wan Chai Oysters",
+            "W/L": "W"
+          },
+          {
+            "Team": "Tuna Tacos",
+            "FP": 155.77,
+            "FP/G": 4.21,
+            "SSN FP/G": 4.21,
+            "SH%": 16.2791,
+            "SSN SH%": 16.2791,
+            "SV%": 0.9508,
+            "SSN SV%": 0.9508,
+            "Opponent": "Taipei 101's",
+            "W/L": "L"
+          },
+          {
+            "Team": "Valhalla Valkyries",
+            "FP": 121.37,
+            "FP/G": 2.8226,
+            "SSN FP/G": 2.8226,
+            "SH%": 11.3636,
+            "SSN SH%": 11.3636,
+            "SV%": 0.886,
+            "SSN SV%": 0.886,
+            "Opponent": "Hagaström Hellraisers",
+            "W/L": "W"
+          },
+          {
+            "Team": "Västermalm Frogs",
+            "FP": 106.68,
+            "FP/G": 2.8832,
+            "SSN FP/G": 2.8832,
+            "SH%": 7.5758,
+            "SSN SH%": 7.5758,
+            "SV%": 0.7966,
+            "SSN SV%": 0.7966,
+            "Opponent": "Gävle Raiders",
+            "W/L": "L"
+          },
+          {
+            "Team": "Wan Chai Oysters",
+            "FP": 143.63,
+            "FP/G": 3.2643,
+            "SSN FP/G": 3.2643,
+            "SH%": 10.4651,
+            "SSN SH%": 10.4651,
+            "SV%": 0.9583,
+            "SSN SV%": 0.9583,
+            "Opponent": "Tessin Bourbons",
+            "W/L": "L"
+          },
+          {
+            "Team": "Ömalm Golden Bananas",
+            "FP": 189.06,
+            "FP/G": 4.2968,
+            "SSN FP/G": 4.2968,
+            "SH%": 15.9091,
+            "SSN SH%": 15.9091,
+            "SV%": 0.8972,
+            "SSN SV%": 0.8972,
+            "Opponent": "Bangkok Ladyboys",
+            "W/L": "W"
+          }
+        ]
+      }
+    }
+  }
+}

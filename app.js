@@ -29,8 +29,13 @@ const seasonTitle = document.getElementById("seasonTitle");
 const trophyCount = document.getElementById("trophyCount");
 const teamCount = document.getElementById("teamCount");
 const lastUpdatedText = document.getElementById("lastUpdatedText");
+const matchupBoard = document.getElementById("matchupBoard");
 const trophyGrid = document.getElementById("trophyGrid");
 const leaderboard = document.getElementById("leaderboard");
+const tabMatchupBoard = document.getElementById("tabMatchupBoard");
+const tabSeasonLeaderboard = document.getElementById("tabSeasonLeaderboard");
+const matchupPane = document.getElementById("matchupPane");
+const leaderboardPane = document.getElementById("leaderboardPane");
 
 const groupLabels = {
   regseason: "Regular Season",
@@ -45,8 +50,39 @@ const sectionLabels = {
   winners: "Winners",
 };
 
-let trackerData = {};
+const embeddedTrophyData = window.__GHL_TROPHY_DATA__ || {};
+const embeddedMatchupData = window.__GHL_MATCHUP_DATA__ || {};
+const trophyDataUrl = "trophy-data.json";
+const matchupDataUrl = "matchup-data.json";
+
+let trackerData = embeddedTrophyData;
+let matchupData = embeddedMatchupData;
 let activeTrophyCard = null;
+let activeLeaderboardRow = null;
+let activeMatchupIndex = 0;
+let matchupSortKey = "Team";
+let matchupSortDirection = "asc";
+let activeTopBoardTab = "matchup";
+
+function setTopBoardTab(tabKey) {
+  activeTopBoardTab = tabKey;
+  const isMatchup = tabKey === "matchup";
+
+  if (tabMatchupBoard) {
+    tabMatchupBoard.classList.toggle("is-active", isMatchup);
+    tabMatchupBoard.setAttribute("aria-selected", String(isMatchup));
+  }
+  if (tabSeasonLeaderboard) {
+    tabSeasonLeaderboard.classList.toggle("is-active", !isMatchup);
+    tabSeasonLeaderboard.setAttribute("aria-selected", String(!isMatchup));
+  }
+  if (matchupPane) {
+    matchupPane.hidden = !isMatchup;
+  }
+  if (leaderboardPane) {
+    leaderboardPane.hidden = isMatchup;
+  }
+}
 
 function formatValue(metric, value) {
   if (typeof value === "number") {
@@ -173,30 +209,246 @@ function collectSeasonWinners(value, winners = []) {
   return winners;
 }
 
+function collectLeaderboardLeaders(seasonData) {
+  const teamLeads = new Map();
+
+  Object.entries(seasonData || {}).forEach(([groupKey, groupValue]) => {
+    if (!groupValue || typeof groupValue !== "object" || Array.isArray(groupValue)) {
+      return;
+    }
+
+    const groupLabel = groupLabels[groupKey] || groupKey;
+
+    Object.entries(groupValue).forEach(([sectionKey, sectionValue]) => {
+      if (!sectionValue || typeof sectionValue !== "object" || Array.isArray(sectionValue)) {
+        return;
+      }
+
+      const sectionLabel = sectionLabels[sectionKey] || sectionKey;
+
+      Object.entries(sectionValue).forEach(([itemName, itemValue]) => {
+        const winner = getWinnerFromEntry(itemValue);
+        if (!winner || !winner[0] || winner[0] === "Winner/Leader TBD" || winner[0] === "Unknown Team") {
+          return;
+        }
+
+        const leadSummary = {
+          groupLabel,
+          sectionLabel,
+          itemName,
+          value: winner[1],
+        };
+
+        if (!teamLeads.has(winner[0])) {
+          teamLeads.set(winner[0], []);
+        }
+
+        teamLeads.get(winner[0]).push(leadSummary);
+      });
+    });
+  });
+
+  return teamLeads;
+}
+
 function renderLeaderboard(seasonKey) {
   const seasonData = trackerData.season?.[seasonKey] || {};
-  const counts = new Map();
+  const teamLeads = collectLeaderboardLeaders(seasonData);
 
-  collectSeasonWinners(seasonData)
-    .filter(([teamName]) => teamName && teamName !== "Winner/Leader TBD" && teamName !== "Unknown Team")
-    .forEach(([teamName]) => {
-      counts.set(teamName, (counts.get(teamName) || 0) + 1);
-    });
+  const rows = [...teamLeads.entries()]
+    .sort((a, b) => b[1].length - a[1].length || a[0].localeCompare(b[0]))
+    .map(([teamName, leads], index) => {
+      const leadCount = leads.length;
+      const leadList = leads
+        .map((lead) => `
+          <li class="leaderboard-item">
+            <span class="leaderboard-item-name">${lead.sectionLabel} · ${lead.itemName}</span>
+            <span class="leaderboard-item-value">${lead.value}</span>
+          </li>
+        `)
+        .join("");
 
-  const rows = [...counts.entries()]
-    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
-    .map(([teamName, count], index) => `
-      <div class="leaderboard-row">
-        <span class="leaderboard-rank">${index + 1}</span>
-        <span class="leaderboard-team">${teamName}</span>
-        <span class="leaderboard-count">${count}</span>
-      </div>
-    `)
+      return `
+        <article class="leaderboard-entry">
+          <button class="leaderboard-row" type="button" aria-expanded="false">
+            <span class="leaderboard-rank">${index + 1}</span>
+            <span class="leaderboard-team-wrap">
+              <span class="leaderboard-team">${teamName}</span>
+              <span class="leaderboard-team-meta">${leadCount} leading ${leadCount === 1 ? "item" : "items"}</span>
+            </span>
+            <span class="leaderboard-count">${leadCount}</span>
+            <span class="leaderboard-chevron">▾</span>
+          </button>
+          <div class="leaderboard-details" aria-hidden="true">
+            <ul class="leaderboard-details-list">${leadList}</ul>
+          </div>
+        </article>
+      `;
+    })
     .join("");
 
   leaderboard.innerHTML = rows
     ? rows
     : '<div class="empty-state compact">No leaderboard data.</div>';
+
+  activeLeaderboardRow = null;
+
+  leaderboard.querySelectorAll(".leaderboard-entry").forEach((entry) => {
+    const toggleButton = entry.querySelector(".leaderboard-row");
+    const panel = entry.querySelector(".leaderboard-details");
+
+    toggleButton.addEventListener("click", () => {
+      const shouldOpen = !entry.classList.contains("is-open");
+
+      if (activeLeaderboardRow && activeLeaderboardRow !== entry) {
+        activeLeaderboardRow.classList.remove("is-open");
+        const previousToggle = activeLeaderboardRow.querySelector(".leaderboard-row");
+        const previousPanel = activeLeaderboardRow.querySelector(".leaderboard-details");
+        previousToggle.setAttribute("aria-expanded", "false");
+        previousPanel.setAttribute("aria-hidden", "true");
+      }
+
+      entry.classList.toggle("is-open", shouldOpen);
+      toggleButton.setAttribute("aria-expanded", String(shouldOpen));
+      panel.setAttribute("aria-hidden", String(!shouldOpen));
+      activeLeaderboardRow = shouldOpen ? entry : null;
+    });
+  });
+}
+
+const matchupColumns = [
+  { key: "Team", label: "Team", type: "string" },
+  { key: "FP", label: "FP", type: "number" },
+  { key: "FP/G", label: "FP/G", type: "number" },
+  { key: "SSN FP/G", label: "SSN FP/G", type: "number" },
+  { key: "SH%", label: "SH%", type: "number" },
+  { key: "SSN SH%", label: "SSN SH%", type: "number" },
+  { key: "SV%", label: "SV%", type: "number" },
+  { key: "SSN SV%", label: "SSN SV%", type: "number" },
+  { key: "Opponent", label: "Opponent", type: "string" },
+  { key: "W/L", label: "W/L", type: "string" },
+];
+
+function parseMatchupNumber(label) {
+  const match = String(label).match(/(\d+)/);
+  return match ? Number(match[1]) : 0;
+}
+
+function formatMatchupCell(column, value) {
+  if (column.type === "number") {
+    const numeric = Number(value || 0);
+    return Number.isFinite(numeric) ? numeric.toFixed(2) : "0.00";
+  }
+  return String(value ?? "");
+}
+
+function getMatchupRows(seasonKey, matchupName) {
+  const seasonNode = matchupData.season?.[seasonKey] || {};
+  const rows = seasonNode.matchups?.[matchupName];
+  return Array.isArray(rows) ? rows : [];
+}
+
+function sortMatchupRows(rows) {
+  const column = matchupColumns.find((entry) => entry.key === matchupSortKey) || matchupColumns[0];
+  const direction = matchupSortDirection === "desc" ? -1 : 1;
+
+  return [...rows].sort((left, right) => {
+    if (column.type === "number") {
+      const leftValue = Number(left?.[column.key] || 0);
+      const rightValue = Number(right?.[column.key] || 0);
+      if (leftValue !== rightValue) {
+        return (leftValue - rightValue) * direction;
+      }
+      return String(left?.Team || "").localeCompare(String(right?.Team || ""));
+    }
+
+    const leftValue = String(left?.[column.key] || "");
+    const rightValue = String(right?.[column.key] || "");
+    const compare = leftValue.localeCompare(rightValue);
+    if (compare !== 0) {
+      return compare * direction;
+    }
+    return String(left?.Team || "").localeCompare(String(right?.Team || ""));
+  });
+}
+
+function renderMatchupBoard(seasonKey) {
+  if (!matchupBoard) {
+    return;
+  }
+
+  const seasonNode = matchupData.season?.[seasonKey] || {};
+  const matchupMap = seasonNode.matchups || {};
+  const matchupNames = Object.keys(matchupMap).sort((a, b) => parseMatchupNumber(a) - parseMatchupNumber(b));
+
+  if (!matchupNames.length) {
+    matchupBoard.innerHTML = '<div class="empty-state">No matchup data available.</div>';
+    return;
+  }
+
+  activeMatchupIndex = Math.max(0, Math.min(activeMatchupIndex, matchupNames.length - 1));
+  const activeMatchupName = matchupNames[activeMatchupIndex];
+  const sortedRows = sortMatchupRows(getMatchupRows(seasonKey, activeMatchupName));
+
+  const headerCells = matchupColumns
+    .map((column) => {
+      const isActive = matchupSortKey === column.key;
+      const indicator = isActive ? (matchupSortDirection === "asc" ? "↑" : "↓") : "↕";
+      return `<th><button class="matchup-sort${isActive ? " is-active" : ""}" data-column="${column.key}" type="button"><span class="matchup-sort-label">${column.label}</span><span class="matchup-sort-indicator">${indicator}</span></button></th>`;
+    })
+    .join("");
+
+  const bodyRows = sortedRows
+    .map((row) => {
+      const cells = matchupColumns.map((column) => `<td>${formatMatchupCell(column, row?.[column.key])}</td>`).join("");
+      return `<tr>${cells}</tr>`;
+    })
+    .join("");
+
+  matchupBoard.innerHTML = `
+    <section class="matchup-card">
+      <div class="matchup-header">
+        <p class="eyebrow">Weekly matchups</p>
+        <div class="matchup-nav">
+          <button class="matchup-nav-btn" data-dir="prev" type="button" ${activeMatchupIndex === 0 ? "disabled" : ""}>◀</button>
+          <h3 class="matchup-title">${activeMatchupName}</h3>
+          <button class="matchup-nav-btn" data-dir="next" type="button" ${activeMatchupIndex === matchupNames.length - 1 ? "disabled" : ""}>▶</button>
+        </div>
+      </div>
+      <div class="matchup-table-wrap">
+        <table class="matchup-table">
+          <thead><tr>${headerCells}</tr></thead>
+          <tbody>${bodyRows}</tbody>
+        </table>
+      </div>
+    </section>
+  `;
+
+  matchupBoard.querySelectorAll(".matchup-nav-btn").forEach((button) => {
+    button.addEventListener("click", () => {
+      const direction = button.getAttribute("data-dir");
+      if (direction === "prev") {
+        activeMatchupIndex = Math.max(0, activeMatchupIndex - 1);
+      }
+      if (direction === "next") {
+        activeMatchupIndex = Math.min(matchupNames.length - 1, activeMatchupIndex + 1);
+      }
+      renderMatchupBoard(seasonKey);
+    });
+  });
+
+  matchupBoard.querySelectorAll(".matchup-sort").forEach((button) => {
+    button.addEventListener("click", () => {
+      const key = button.getAttribute("data-column") || "Team";
+      if (matchupSortKey === key) {
+        matchupSortDirection = matchupSortDirection === "asc" ? "desc" : "asc";
+      } else {
+        matchupSortKey = key;
+        matchupSortDirection = "asc";
+      }
+      renderMatchupBoard(seasonKey);
+    });
+  });
 }
 
 function getWinnerFromItem(itemValue) {
@@ -344,6 +596,7 @@ function renderTrophies(seasonKey) {
 
   activeTrophyCard = null;
   trophyGrid.innerHTML = "";
+  renderMatchupBoard(seasonKey);
   renderLeaderboard(seasonKey);
 
   const hasAnyContent = seasonGroups.some(({ key }) => {
@@ -398,24 +651,38 @@ function renderTrophies(seasonKey) {
 }
 
 async function loadTrackerData() {
-  const binId = "6abfac4bac6210605a0c5190";
-  const response = await fetch(`https://api.jsonbin.io/v3/b/${binId}`, {
-    headers: {
-      "X-Bin-Meta": "false",
-    },
-  });
+  if (window.location.protocol === "file:") {
+    trackerData = embeddedTrophyData;
+    matchupData = embeddedMatchupData;
+  } else {
+    try {
+      const [trophyResponse, matchupResponse] = await Promise.all([
+        fetch(trophyDataUrl, { cache: "no-store" }),
+        fetch(matchupDataUrl, { cache: "no-store" }),
+      ]);
 
-  if (!response.ok) {
-    throw new Error(`Failed to load tracker data (${response.status})`);
+      if (!trophyResponse.ok) {
+        throw new Error(`Failed to load trophy data (${trophyResponse.status})`);
+      }
+
+      trackerData = await trophyResponse.json();
+      matchupData = matchupResponse.ok ? await matchupResponse.json() : embeddedMatchupData;
+    } catch (error) {
+      trackerData = embeddedTrophyData;
+      matchupData = embeddedMatchupData;
+    }
   }
 
-  const payload = await response.json();
-  trackerData = payload.record || payload;
-  const seasons = Object.keys(trackerData.season || {});
+  const seasonSet = new Set([
+    ...Object.keys(trackerData.season || {}),
+    ...Object.keys(matchupData.season || {}),
+  ]);
+  const seasons = [...seasonSet].sort((a, b) => b.localeCompare(a));
 
   if (!seasons.length) {
     seasonSelect.innerHTML = "<option value=''>No seasons available</option>";
-    trophyGrid.innerHTML = '<div class="empty-state">No season data was returned from the bin.</div>';
+    matchupBoard.innerHTML = '<div class="empty-state">No matchup data was loaded from the local snapshots.</div>';
+    trophyGrid.innerHTML = '<div class="empty-state">No trophy data was loaded from the local snapshots.</div>';
     return;
   }
 
@@ -428,11 +695,20 @@ async function loadTrackerData() {
 }
 
 seasonSelect.addEventListener("change", (event) => {
+  activeMatchupIndex = 0;
   renderTrophies(event.target.value);
 });
 
+if (tabMatchupBoard) {
+  tabMatchupBoard.addEventListener("click", () => setTopBoardTab("matchup"));
+}
+if (tabSeasonLeaderboard) {
+  tabSeasonLeaderboard.addEventListener("click", () => setTopBoardTab("leaderboard"));
+}
+
 (async () => {
   try {
+    setTopBoardTab(activeTopBoardTab);
     await loadTrackerData();
   } catch (error) {
     trophyGrid.innerHTML = `<div class="empty-state">${error.message}</div>`;

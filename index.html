@@ -34,19 +34,36 @@
 
       <main class="dashboard">
         <div class="dashboard-layout">
-          <section id="trophyGrid" class="trophy-grid" aria-live="polite"></section>
+          <div class="dashboard-main">
+            <section class="top-board-card" aria-live="polite">
+              <div class="top-board-tabs" role="tablist" aria-label="Top board views">
+                <button id="tabMatchupBoard" class="top-board-tab is-active" type="button" role="tab" aria-selected="true" aria-controls="matchupPane">Matchup Board</button>
+                <button id="tabSeasonLeaderboard" class="top-board-tab" type="button" role="tab" aria-selected="false" aria-controls="leaderboardPane">Season Leaderboard</button>
+              </div>
 
-          <aside class="leaderboard-panel" aria-live="polite">
-            <div class="leaderboard-header">
-              <p class="eyebrow">Season leaderboard</p>
-              <h3>Unique trophies</h3>
-            </div>
-            <div id="leaderboard" class="leaderboard"></div>
-          </aside>
+              <div id="matchupPane" class="top-board-pane" role="tabpanel" aria-labelledby="tabMatchupBoard">
+                <section id="matchupBoard" class="matchup-board"></section>
+              </div>
+
+              <div id="leaderboardPane" class="top-board-pane" role="tabpanel" aria-labelledby="tabSeasonLeaderboard" hidden>
+                <aside class="leaderboard-panel">
+                  <div class="leaderboard-header">
+                    <p class="eyebrow">Season leaderboard</p>
+                    <p class="leaderboard-note">Expand a team to see the trophies, awards, bounties, and achievements it leads.</p>
+                  </div>
+                  <div id="leaderboard" class="leaderboard"></div>
+                </aside>
+              </div>
+            </section>
+
+            <section id="trophyGrid" class="trophy-grid" aria-live="polite"></section>
+          </div>
         </div>
       </main>
     </div>
 
+    <script src="trophy-data.js"></script>
+    <script src="matchup-data.js"></script>
     <script src="app.js"></script>
   </body>
 </html>
