@@ -29,9 +29,6 @@ jobs:
           TROPHY_TRACKER_SYNC_GIT: "true"
           FANTRAX_LEAGUE_ID: ${{ secrets.FANTRAX_LEAGUE_ID }}
           WEEKS_IN_SEASON: ${{ vars.WEEKS_IN_SEASON || 22 }}
-          # GHLTROPHYTRACKER_BIN_ID: ${{ secrets.GHLTROPHYTRACKER_BIN_ID }}
-          # JSONBINIO_X_MASTER_KEY: ${{ secrets.JSONBINIO_X_MASTER_KEY }}
-          # JSONBINIO_X_ACCESS_KEY: ${{ secrets.JSONBINIO_X_ACCESS_KEY }}
           __cf_bm: ${{ secrets.CF_BM }}
           cf_clearance: ${{ secrets.CF_CLEARANCE }}
           FX_RM: ${{ secrets.FX_RM }}

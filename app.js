@@ -63,6 +63,25 @@ let activeMatchupIndex = 0;
 let matchupSortKey = "Team";
 let matchupSortDirection = "asc";
 let activeTopBoardTab = "matchup";
+let matchupTableScrollLeft = 0;
+let matchupScrollRestoreTimers = [];
+
+function clearMatchupScrollRestoreTimers() {
+  matchupScrollRestoreTimers.forEach((timerId) => window.clearTimeout(timerId));
+  matchupScrollRestoreTimers = [];
+}
+
+function restoreMatchupTableScroll(tableWrap) {
+  const targetScrollLeft = matchupTableScrollLeft;
+  const applyScroll = () => {
+    tableWrap.scrollLeft = targetScrollLeft;
+  };
+
+  applyScroll();
+  window.requestAnimationFrame(applyScroll);
+  matchupScrollRestoreTimers.push(window.setTimeout(applyScroll, 0));
+  matchupScrollRestoreTimers.push(window.setTimeout(applyScroll, 80));
+}
 
 function setTopBoardTab(tabKey) {
   activeTopBoardTab = tabKey;
@@ -377,6 +396,13 @@ function renderMatchupBoard(seasonKey) {
     return;
   }
 
+  clearMatchupScrollRestoreTimers();
+
+  const previousTableWrap = matchupBoard.querySelector(".matchup-table-wrap");
+  if (previousTableWrap) {
+    matchupTableScrollLeft = previousTableWrap.scrollLeft;
+  }
+
   const seasonNode = matchupData.season?.[seasonKey] || {};
   const matchupMap = seasonNode.matchups || {};
   const matchupNames = Object.keys(matchupMap).sort((a, b) => parseMatchupNumber(a) - parseMatchupNumber(b));
@@ -424,6 +450,14 @@ function renderMatchupBoard(seasonKey) {
     </section>
   `;
 
+  const tableWrap = matchupBoard.querySelector(".matchup-table-wrap");
+  if (tableWrap) {
+    restoreMatchupTableScroll(tableWrap);
+    tableWrap.addEventListener("scroll", () => {
+      matchupTableScrollLeft = tableWrap.scrollLeft;
+    });
+  }
+
   matchupBoard.querySelectorAll(".matchup-nav-btn").forEach((button) => {
     button.addEventListener("click", () => {
       const direction = button.getAttribute("data-dir");
@@ -439,6 +473,11 @@ function renderMatchupBoard(seasonKey) {
 
   matchupBoard.querySelectorAll(".matchup-sort").forEach((button) => {
     button.addEventListener("click", () => {
+      const activeTableWrap = matchupBoard.querySelector(".matchup-table-wrap");
+      if (activeTableWrap) {
+        matchupTableScrollLeft = activeTableWrap.scrollLeft;
+      }
+
       const key = button.getAttribute("data-column") || "Team";
       if (matchupSortKey === key) {
         matchupSortDirection = matchupSortDirection === "asc" ? "desc" : "asc";
