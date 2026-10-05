@@ -531,8 +531,10 @@ def build_matchup_data_json(
                         "FP": round(team_score, 2),
                         "FP/G": round(team_score / games_played, 4) if games_played else 0.0,
                         "SSN FP/G": round(team_cumulative["fpts"] / team_cumulative["games"], 4) if team_cumulative["games"] else 0.0,
-                        "SH%": round((goals / sog) * 100.0, 4) if sog else 0.0,
-                        "SSN SH%": round((team_cumulative["goals"] / team_cumulative["sog"]) * 100.0, 4) if team_cumulative["sog"] else 0.0,
+                        "SOG": round(sog, 4),
+                        "SSN SOG": round(team_cumulative["sog"], 4),
+                        "S%": round((goals / sog) * 100.0, 4) if sog else 0.0,
+                        "SSN S%": round((team_cumulative["goals"] / team_cumulative["sog"]) * 100.0, 4) if team_cumulative["sog"] else 0.0,
                         "SV%": round(saves / (saves + goals_against), 4) if (saves + goals_against) else 0.0,
                         "SSN SV%": round(team_cumulative["sv"] / (team_cumulative["sv"] + team_cumulative["ga"]), 4)
                         if (team_cumulative["sv"] + team_cumulative["ga"])

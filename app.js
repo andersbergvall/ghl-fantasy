@@ -339,14 +339,35 @@ const matchupColumns = [
   { key: "Team", label: "Team", type: "string" },
   { key: "FP", label: "FP", type: "number" },
   { key: "FP/G", label: "FP/G", type: "number" },
-  { key: "SSN FP/G", label: "SSN FP/G", type: "number" },
-  { key: "SH%", label: "SH%", type: "number" },
-  { key: "SSN SH%", label: "SSN SH%", type: "number" },
+  { key: "SSN FP/G", label: "SSN", type: "number" },
+  { key: "SOG", label: "SOG", type: "number" },
+  { key: "SSN SOG", label: "SSN", type: "number" },
+  { key: "S%", label: "S%", type: "number" },
+  { key: "SSN S%", label: "SSN", type: "number" },
   { key: "SV%", label: "SV%", type: "number" },
-  { key: "SSN SV%", label: "SSN SV%", type: "number" },
+  { key: "SSN SV%", label: "SSN", type: "number" },
   { key: "Opponent", label: "Opponent", type: "string" },
   { key: "W/L", label: "W/L", type: "string" },
 ];
+
+function getMatchupCellValue(row, key) {
+  if (!row || typeof row !== "object") {
+    return undefined;
+  }
+
+  if (key in row) {
+    return row[key];
+  }
+
+  if (key === "S%") {
+    return row["SH%"];
+  }
+  if (key === "SSN S%") {
+    return row["SSN SH%"];
+  }
+
+  return undefined;
+}
 
 function parseMatchupNumber(label) {
   const match = String(label).match(/(\d+)/);
@@ -356,7 +377,15 @@ function parseMatchupNumber(label) {
 function formatMatchupCell(column, value) {
   if (column.type === "number") {
     const numeric = Number(value || 0);
-    return Number.isFinite(numeric) ? numeric.toFixed(2) : "0.00";
+    if (!Number.isFinite(numeric)) {
+      return "0.00";
+    }
+
+    if (column.key === "SOG" || column.key === "SSN SOG") {
+      return String(Math.round(numeric));
+    }
+
+    return numeric.toFixed(2);
   }
   return String(value ?? "");
 }
@@ -373,16 +402,16 @@ function sortMatchupRows(rows) {
 
   return [...rows].sort((left, right) => {
     if (column.type === "number") {
-      const leftValue = Number(left?.[column.key] || 0);
-      const rightValue = Number(right?.[column.key] || 0);
+      const leftValue = Number(getMatchupCellValue(left, column.key) || 0);
+      const rightValue = Number(getMatchupCellValue(right, column.key) || 0);
       if (leftValue !== rightValue) {
         return (leftValue - rightValue) * direction;
       }
       return String(left?.Team || "").localeCompare(String(right?.Team || ""));
     }
 
-    const leftValue = String(left?.[column.key] || "");
-    const rightValue = String(right?.[column.key] || "");
+    const leftValue = String(getMatchupCellValue(left, column.key) || "");
+    const rightValue = String(getMatchupCellValue(right, column.key) || "");
     const compare = leftValue.localeCompare(rightValue);
     if (compare !== 0) {
       return compare * direction;
@@ -426,7 +455,7 @@ function renderMatchupBoard(seasonKey) {
 
   const bodyRows = sortedRows
     .map((row) => {
-      const cells = matchupColumns.map((column) => `<td>${formatMatchupCell(column, row?.[column.key])}</td>`).join("");
+      const cells = matchupColumns.map((column) => `<td>${formatMatchupCell(column, getMatchupCellValue(row, column.key))}</td>`).join("");
       return `<tr>${cells}</tr>`;
     })
     .join("");
