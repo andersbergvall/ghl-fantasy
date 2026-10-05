@@ -429,6 +429,17 @@ def build_matchup_data_json(
     season_key: str = "2026-2027",
 ) -> Dict[str, Any]:
     """Build matchup-by-matchup team metrics from the Fantrax getMatchupScores endpoint."""
+    def ordinal_day(day: int) -> str:
+        if 10 <= day % 100 <= 20:
+            suffix = "th"
+        else:
+            suffix = {1: "st", 2: "nd", 3: "rd"}.get(day % 10, "th")
+        return f"{day}{suffix}"
+
+    def format_matchup_lastupdated() -> str:
+        dt = __import__("datetime").datetime.utcnow() + __import__("datetime").timedelta(hours=2)
+        return dt.strftime(f"%B {ordinal_day(dt.day)} %Y, %H:%M")
+
     load_env_file()
     season_weeks = weeks_in_season if weeks_in_season is not None else get_weeks_in_season()
 
@@ -536,7 +547,14 @@ def build_matchup_data_json(
 
         matchup_payload[f"Matchup {period}"] = sorted(matchup_rows, key=lambda item: str(item.get("Team", "")).lower())
 
-    return {"season": {season_key: {"matchups": matchup_payload}}}
+    return {
+        "season": {
+            season_key: {
+                "lastupdated": format_matchup_lastupdated(),
+                "matchups": matchup_payload,
+            }
+        }
+    }
 
 
 def download_schedule_tables(

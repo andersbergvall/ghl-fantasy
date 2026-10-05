@@ -1,7 +1,7 @@
 window.__GHL_TROPHY_DATA__ = {
   "season": {
     "2026-2027": {
-      "lastupdated": "October 5th 2026, 14:24",
+      "lastupdated": "October 5th 2026, 14:26",
       "regseason": {
         "trophies": {
           "Hart": [
