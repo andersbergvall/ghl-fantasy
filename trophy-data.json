@@ -1,7 +1,7 @@
 {
   "season": {
     "2026-2027": {
-      "lastupdated": "October 5th 2026, 21:33",
+      "lastupdated": "October 6th 2026, 09:10",
       "regseason": {
         "trophies": {
           "Hart": [
@@ -26,14 +26,14 @@
               "Fpts": 26.4
             },
             {
+              "Team": "Bönan Bonebreakers",
+              "Player": "Kyle Connor",
+              "Fpts": 25.8
+            },
+            {
               "Team": "Ömalm Golden Bananas",
               "Player": "Dylan Guenther",
               "Fpts": 25.6
-            },
-            {
-              "Team": "Bönan Bonebreakers",
-              "Player": "Kyle Connor",
-              "Fpts": 25.1
             },
             {
               "Team": "Bönan Bonebreakers",
@@ -44,6 +44,11 @@
               "Team": "Taipei 101's",
               "Player": "Leon Draisaitl",
               "Fpts": 23.2
+            },
+            {
+              "Team": "Ömalm Golden Bananas",
+              "Player": "Cole Perfetti",
+              "Fpts": 21.3
             },
             {
               "Team": "Taipei 101's",
@@ -59,108 +64,103 @@
               "Team": "Valhalla Valkyries",
               "Player": "Nick Schmaltz",
               "Fpts": 20.2
-            },
-            {
-              "Team": "Rinkeby Runners",
-              "Player": "Cutter Gauthier",
-              "Fpts": 19.5
             }
           ],
           "Art Ross": {
-            "Ömalm Golden Bananas": 189.06,
-            "Bönan Bonebreakers": 162.32,
-            "Taipei 101's": 158.45,
-            "Bangkok Ladyboys": 157.49,
-            "Tuna Tacos": 155.77,
-            "Tessin Bourbons": 150.44,
-            "Wan Chai Oysters": 143.63,
-            "Valhalla Valkyries": 121.37,
-            "Rinkeby Runners": 115.54,
-            "Gävle Raiders": 112.81,
-            "Västermalm Frogs": 106.68,
-            "Hagaström Hellraisers": 98.91
+            "Ömalm Golden Bananas": 194.06,
+            "Bangkok Ladyboys": 180.21,
+            "Bönan Bonebreakers": 174.32,
+            "Tessin Bourbons": 162.54,
+            "Tuna Tacos": 160.07,
+            "Taipei 101's": 159.55,
+            "Wan Chai Oysters": 148.23,
+            "Rinkeby Runners": 132.95,
+            "Västermalm Frogs": 128.78,
+            "Valhalla Valkyries": 126.37,
+            "Gävle Raiders": 115.41,
+            "Hagaström Hellraisers": 107.02
           },
           "Rocket Richard": {
+            "Tessin Bourbons": 17.0,
             "Bönan Bonebreakers": 16.0,
-            "Tessin Bourbons": 15.0,
-            "Tuna Tacos": 14.0,
-            "Ömalm Golden Bananas": 14.0,
-            "Bangkok Ladyboys": 12.0,
+            "Tuna Tacos": 15.0,
+            "Ömalm Golden Bananas": 15.0,
+            "Bangkok Ladyboys": 14.0,
             "Taipei 101's": 11.0,
             "Valhalla Valkyries": 10.0,
-            "Wan Chai Oysters": 9.0,
+            "Wan Chai Oysters": 10.0,
             "Gävle Raiders": 8.0,
-            "Rinkeby Runners": 7.0,
-            "Hagaström Hellraisers": 5.0,
-            "Västermalm Frogs": 5.0
+            "Rinkeby Runners": 8.0,
+            "Västermalm Frogs": 7.0,
+            "Hagaström Hellraisers": 5.0
           },
           "Norris": {
             "Tessin Bourbons": 14.0,
-            "Hagaström Hellraisers": 11.0,
-            "Bangkok Ladyboys": 9.0,
+            "Hagaström Hellraisers": 12.0,
+            "Bangkok Ladyboys": 11.0,
             "Västermalm Frogs": 8.0,
             "Tuna Tacos": 7.0,
             "Valhalla Valkyries": 7.0,
             "Ömalm Golden Bananas": 6.0,
+            "Rinkeby Runners": 5.0,
             "Taipei 101's": 5.0,
-            "Rinkeby Runners": 4.0,
             "Wan Chai Oysters": 3.0,
             "Bönan Bonebreakers": 2.0,
             "Gävle Raiders": 1.0
           },
           "Selke": {
-            "Valhalla Valkyries": 9.0,
-            "Taipei 101's": 7.0,
+            "Valhalla Valkyries": 7.0,
             "Gävle Raiders": 6.0,
-            "Ömalm Golden Bananas": 6.0,
-            "Hagaström Hellraisers": 4.0,
-            "Tuna Tacos": 4.0,
-            "Tessin Bourbons": 3.0,
-            "Västermalm Frogs": 2.0,
-            "Wan Chai Oysters": 2.0,
-            "Bönan Bonebreakers": 0.0,
-            "Bangkok Ladyboys": -6.0,
-            "Rinkeby Runners": -15.0
+            "Hagaström Hellraisers": 5.0,
+            "Västermalm Frogs": 5.0,
+            "Taipei 101's": 4.0,
+            "Tessin Bourbons": 2.0,
+            "Ömalm Golden Bananas": 2.0,
+            "Tuna Tacos": 1.0,
+            "Bönan Bonebreakers": -2.0,
+            "Wan Chai Oysters": -2.0,
+            "Bangkok Ladyboys": -9.0,
+            "Rinkeby Runners": -9.0
           },
           "Lady Byng": {
             "Ömalm Golden Bananas": 6.0,
-            "Tuna Tacos": 12.0,
-            "Valhalla Valkyries": 13.0,
-            "Bangkok Ladyboys": 15.0,
+            "Tuna Tacos": 14.0,
             "Hagaström Hellraisers": 16.0,
             "Wan Chai Oysters": 18.0,
-            "Gävle Raiders": 22.0,
+            "Bangkok Ladyboys": 19.0,
             "Taipei 101's": 22.0,
+            "Gävle Raiders": 26.0,
             "Bönan Bonebreakers": 27.0,
+            "Valhalla Valkyries": 31.0,
             "Västermalm Frogs": 31.0,
-            "Tessin Bourbons": 35.0,
-            "Rinkeby Runners": 37.0
+            "Rinkeby Runners": 37.0,
+            "Tessin Bourbons": 37.0
           },
           "Jim Gregory": {
-            "Tessin Bourbons": 47.0,
-            "Bangkok Ladyboys": 45.0,
-            "Ömalm Golden Bananas": 44.0,
-            "Taipei 101's": 44.0,
-            "Wan Chai Oysters": 44.0,
-            "Valhalla Valkyries": 43.0,
-            "Rinkeby Runners": 43.0,
-            "Bönan Bonebreakers": 42.0,
-            "Gävle Raiders": 41.0,
-            "Tuna Tacos": 37.0,
-            "Västermalm Frogs": 37.0,
-            "Hagaström Hellraisers": 33.0
+            "Bangkok Ladyboys": 53.0,
+            "Tessin Bourbons": 52.0,
+            "Wan Chai Oysters": 50.0,
+            "Valhalla Valkyries": 49.0,
+            "Ömalm Golden Bananas": 48.0,
+            "Bönan Bonebreakers": 48.0,
+            "Taipei 101's": 47.0,
+            "Rinkeby Runners": 46.0,
+            "Gävle Raiders": 45.0,
+            "Västermalm Frogs": 42.0,
+            "Tuna Tacos": 40.0,
+            "Hagaström Hellraisers": 37.0
           },
           "Vezina": {
+            "Bangkok Ladyboys": 38.8,
             "Wan Chai Oysters": 35.0,
-            "Bangkok Ladyboys": 29.2,
-            "Tuna Tacos": 26.1,
+            "Tuna Tacos": 25.9,
+            "Bönan Bonebreakers": 17.9,
+            "Rinkeby Runners": 17.8,
             "Ömalm Golden Bananas": 17.2,
+            "Hagaström Hellraisers": 16.4,
             "Taipei 101's": 13.9,
             "Gävle Raiders": 13.8,
-            "Valhalla Valkyries": 13.2,
-            "Rinkeby Runners": 13.2,
-            "Hagaström Hellraisers": 13.0,
-            "Bönan Bonebreakers": 12.9,
+            "Valhalla Valkyries": 12.4,
             "Tessin Bourbons": 10.6,
             "Västermalm Frogs": -2.6
           },
@@ -178,7 +178,7 @@
             {
               "Team": "Tuna Tacos",
               "Player Name": "Will Smith",
-              "Fpts": 15.1
+              "Fpts": 13.6
             },
             {
               "Team": "Hagaström Hellraisers",
@@ -213,7 +213,7 @@
             {
               "Team": "Västermalm Frogs",
               "Player Name": "Michael Misa",
-              "Fpts": 3.7
+              "Fpts": 3.9
             },
             {
               "Team": "Gävle Raiders",
@@ -222,70 +222,70 @@
             }
           ],
           "Jack Adams": {
+            "Hagaström Hellraisers": 0.8,
             "Bangkok Ladyboys": 0.0,
-            "Hagaström Hellraisers": 0.0,
-            "Gävle Raiders": -0.3,
-            "Rinkeby Runners": -7.6,
-            "Västermalm Frogs": -8.6,
-            "Bönan Bonebreakers": -8.9,
-            "Wan Chai Oysters": -9.1,
-            "Tessin Bourbons": -9.31,
-            "Ömalm Golden Bananas": -10.8,
+            "Gävle Raiders": -0.6,
+            "Tessin Bourbons": -3.71,
+            "Bönan Bonebreakers": -8.1,
+            "Wan Chai Oysters": -9.3,
             "Tuna Tacos": -11.3,
-            "Valhalla Valkyries": -11.91,
+            "Rinkeby Runners": -11.3,
+            "Ömalm Golden Bananas": -11.4,
+            "Valhalla Valkyries": -12.61,
+            "Västermalm Frogs": -14.9,
             "Taipei 101's": -20.62
           }
         },
         "awards": {
           "Scout's honor": {
-            "Ömalm Golden Bananas": 199.86,
-            "Taipei 101's": 179.07,
-            "Bönan Bonebreakers": 171.22,
-            "Tuna Tacos": 167.07,
-            "Tessin Bourbons": 159.75,
-            "Bangkok Ladyboys": 157.49,
-            "Wan Chai Oysters": 152.73,
-            "Valhalla Valkyries": 133.28,
-            "Rinkeby Runners": 123.14,
-            "Västermalm Frogs": 115.28,
-            "Gävle Raiders": 113.11,
-            "Hagaström Hellraisers": 98.91
+            "Ömalm Golden Bananas": 205.46,
+            "Bönan Bonebreakers": 182.42,
+            "Bangkok Ladyboys": 180.21,
+            "Taipei 101's": 180.17,
+            "Tuna Tacos": 171.37,
+            "Tessin Bourbons": 166.25,
+            "Wan Chai Oysters": 157.53,
+            "Rinkeby Runners": 144.25,
+            "Västermalm Frogs": 143.68,
+            "Valhalla Valkyries": 138.98,
+            "Gävle Raiders": 116.01,
+            "Hagaström Hellraisers": 106.22
           },
           "Fantalytic's Frenzy": {
-            "Taipei 101's": 0.58,
-            "Bönan Bonebreakers": 0.58,
-            "Valhalla Valkyries": 0.55,
-            "Tuna Tacos": 0.45,
-            "Tessin Bourbons": 0.42,
+            "Bönan Bonebreakers": 0.45,
+            "Taipei 101's": 0.39,
             "Bangkok Ladyboys": 0.39,
+            "Valhalla Valkyries": 0.36,
+            "Tessin Bourbons": 0.36,
+            "Tuna Tacos": 0.33,
             "Ömalm Golden Bananas": 0.24,
-            "Gävle Raiders": 0.24,
-            "Rinkeby Runners": 0.15,
-            "Wan Chai Oysters": 0.0,
-            "Västermalm Frogs": -0.15,
-            "Hagaström Hellraisers": -0.45
+            "Gävle Raiders": 0.18,
+            "Rinkeby Runners": 0.03,
+            "Västermalm Frogs": -0.03,
+            "Wan Chai Oysters": -0.12,
+            "Hagaström Hellraisers": -0.33
           }
         },
         "bounties": {
           "It's Vegas Baby!": {
             "Ömalm Golden Bananas": "Week 1: 189.06",
-            "Bönan Bonebreakers": "Week 1: 162.32",
+            "Bönan Bonebreakers": "Week 1: 162.12",
             "Taipei 101's": "Week 1: 158.45",
             "Bangkok Ladyboys": "Week 1: 157.49",
-            "Tuna Tacos": "Week 1: 155.77",
-            "Tessin Bourbons": "Week 1: 150.44",
+            "Tuna Tacos": "Week 1: 155.57",
+            "Tessin Bourbons": "Week 1: 150.24",
             "Wan Chai Oysters": "Week 1: 143.63",
             "Valhalla Valkyries": "Week 1: 121.37",
             "Rinkeby Runners": "Week 1: 115.54",
             "Gävle Raiders": "Week 1: 112.81",
-            "Västermalm Frogs": "Week 1: 106.68",
+            "Västermalm Frogs": "Week 1: 106.88",
             "Hagaström Hellraisers": "Week 1: 98.91"
           },
           "Back's Backe Back-2-Back": {
             "Ömalm Golden Bananas": "1-0-0",
             "Bönan Bonebreakers": "1-0-0",
-            "Taipei 101's": "1-0-0",
             "Tessin Bourbons": "1-0-0",
+            "Taipei 101's": "1-0-0",
             "Valhalla Valkyries": "1-0-0",
             "Gävle Raiders": "1-0-0",
             "Bangkok Ladyboys": "0-1-0",
