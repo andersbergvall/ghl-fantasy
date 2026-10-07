@@ -59,9 +59,9 @@ let trackerData = embeddedTrophyData;
 let matchupData = embeddedMatchupData;
 let activeTrophyCard = null;
 let activeLeaderboardRow = null;
-let activeMatchupIndex = 0;
-let matchupSortKey = "Team";
-let matchupSortDirection = "asc";
+let activeMatchupIndex = -1;
+let matchupSortKey = "FP";
+let matchupSortDirection = "desc";
 let activeTopBoardTab = "matchup";
 let matchupTableScrollLeft = 0;
 let matchupScrollRestoreTimers = [];
@@ -396,6 +396,44 @@ function getMatchupRows(seasonKey, matchupName) {
   return Array.isArray(rows) ? rows : [];
 }
 
+function getSeasonSsnLookup(seasonKey, matchupNames) {
+  const latestMatchupName = matchupNames[matchupNames.length - 1];
+  const latestRows = getMatchupRows(seasonKey, latestMatchupName);
+  const lookup = new Map();
+
+  latestRows.forEach((row) => {
+    const teamName = String(row?.Team || "").trim();
+    if (!teamName) {
+      return;
+    }
+
+    lookup.set(teamName, {
+      "SSN FP/G": row["SSN FP/G"],
+      "SSN SOG": row["SSN SOG"],
+      "SSN S%": row["SSN S%"] ?? row["SSN SH%"],
+      "SSN SH%": row["SSN SH%"] ?? row["SSN S%"],
+      "SSN SV%": row["SSN SV%"],
+    });
+  });
+
+  return lookup;
+}
+
+function applySeasonSsnTotals(rows, seasonSsnLookup) {
+  return rows.map((row) => {
+    const teamName = String(row?.Team || "").trim();
+    const seasonTotals = seasonSsnLookup.get(teamName);
+    if (!seasonTotals) {
+      return row;
+    }
+
+    return {
+      ...row,
+      ...seasonTotals,
+    };
+  });
+}
+
 function sortMatchupRows(rows) {
   const column = matchupColumns.find((entry) => entry.key === matchupSortKey) || matchupColumns[0];
   const direction = matchupSortDirection === "desc" ? -1 : 1;
@@ -441,9 +479,14 @@ function renderMatchupBoard(seasonKey) {
     return;
   }
 
-  activeMatchupIndex = Math.max(0, Math.min(activeMatchupIndex, matchupNames.length - 1));
+  if (activeMatchupIndex < 0 || activeMatchupIndex >= matchupNames.length) {
+    activeMatchupIndex = matchupNames.length - 1;
+  }
+
   const activeMatchupName = matchupNames[activeMatchupIndex];
-  const sortedRows = sortMatchupRows(getMatchupRows(seasonKey, activeMatchupName));
+  const seasonSsnLookup = getSeasonSsnLookup(seasonKey, matchupNames);
+  const activeMatchupRows = getMatchupRows(seasonKey, activeMatchupName);
+  const sortedRows = sortMatchupRows(applySeasonSsnTotals(activeMatchupRows, seasonSsnLookup));
 
   const headerCells = matchupColumns
     .map((column) => {
@@ -763,7 +806,7 @@ async function loadTrackerData() {
 }
 
 seasonSelect.addEventListener("change", (event) => {
-  activeMatchupIndex = 0;
+  activeMatchupIndex = -1;
   renderTrophies(event.target.value);
 });
 

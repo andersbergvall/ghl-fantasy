@@ -67,7 +67,7 @@ body {
 
 .brand-wrap {
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   gap: 14px;
   min-height: 100%;
 }
