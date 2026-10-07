@@ -6,9 +6,6 @@ on:
     - cron: "49 7 * * *"
       timezone: "Europe/Stockholm"
 
-permissions:
-  contents: write
-
 jobs:
   update:
     runs-on: ubuntu-latest
@@ -27,9 +24,15 @@ jobs:
 
       - name: Run trophy and matchup update
         env:
-          TROPHY_TRACKER_SYNC_GIT: "true"
+          PUBLISH_TO_CLOUDFLARE_KV: "true"
           FANTRAX_LEAGUE_ID: ${{ secrets.FANTRAX_LEAGUE_ID }}
           WEEKS_IN_SEASON: ${{ vars.WEEKS_IN_SEASON || 22 }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_KV_NAMESPACE_ID_TROPHY_DATA: ${{ secrets.CLOUDFLARE_KV_NAMESPACE_ID_TROPHY_DATA }}
+          CLOUDFLARE_KV_NAMESPACE_ID_MATCHUP_DATA: ${{ secrets.CLOUDFLARE_KV_NAMESPACE_ID_MATCHUP_DATA }}
+          CLOUDFLARE_KV_KEY_TROPHY_DATA: "trophy-data"
+          CLOUDFLARE_KV_KEY_MATCHUP_DATA: "matchup-data"
           __cf_bm: ${{ secrets.CF_BM }}
           cf_clearance: ${{ secrets.CF_CLEARANCE }}
           FX_RM: ${{ secrets.FX_RM }}

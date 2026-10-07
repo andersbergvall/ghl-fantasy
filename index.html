@@ -4,6 +4,10 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>GHL Trophy Tracker</title>
+    <script>
+      window.__GHL_TROPHY_DATA_URL__ = "https://purple-meadow-3929.anders-bergvall-bd5.workers.dev/trophy-data?v=20261007";
+      window.__GHL_MATCHUP_DATA_URL__ = "https://purple-meadow-3929.anders-bergvall-bd5.workers.dev/matchup-data?v=20261007";
+    </script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet" />
@@ -37,15 +41,15 @@
           <div class="dashboard-main">
             <section class="top-board-card" aria-live="polite">
               <div class="top-board-tabs" role="tablist" aria-label="Top board views">
-                <button id="tabMatchupBoard" class="top-board-tab is-active" type="button" role="tab" aria-selected="true" aria-controls="matchupPane">Matchup Board</button>
-                <button id="tabSeasonLeaderboard" class="top-board-tab" type="button" role="tab" aria-selected="false" aria-controls="leaderboardPane">Season Leaderboard</button>
+                <button id="tabMatchupBoard" class="top-board-tab" type="button" role="tab" aria-selected="false" aria-controls="matchupPane">Matchup Board</button>
+                <button id="tabSeasonLeaderboard" class="top-board-tab is-active" type="button" role="tab" aria-selected="true" aria-controls="leaderboardPane">Season Leaderboard</button>
               </div>
 
-              <div id="matchupPane" class="top-board-pane" role="tabpanel" aria-labelledby="tabMatchupBoard">
+              <div id="matchupPane" class="top-board-pane" role="tabpanel" aria-labelledby="tabMatchupBoard" hidden>
                 <section id="matchupBoard" class="matchup-board"></section>
               </div>
 
-              <div id="leaderboardPane" class="top-board-pane" role="tabpanel" aria-labelledby="tabSeasonLeaderboard" hidden>
+              <div id="leaderboardPane" class="top-board-pane" role="tabpanel" aria-labelledby="tabSeasonLeaderboard">
                 <aside class="leaderboard-panel">
                   <div class="leaderboard-header">
                     <p class="eyebrow">Season leaderboard</p>
@@ -62,8 +66,6 @@
       </main>
     </div>
 
-    <script src="trophy-data.js"></script>
-    <script src="matchup-data.js"></script>
     <script src="app.js"></script>
   </body>
 </html>

@@ -50,19 +50,17 @@ const sectionLabels = {
   winners: "Winners",
 };
 
-const embeddedTrophyData = window.__GHL_TROPHY_DATA__ || {};
-const embeddedMatchupData = window.__GHL_MATCHUP_DATA__ || {};
-const trophyDataUrl = "trophy-data.json";
-const matchupDataUrl = "matchup-data.json";
+const trophyDataUrl = window.__GHL_TROPHY_DATA_URL__ || "/trophy-data";
+const matchupDataUrl = window.__GHL_MATCHUP_DATA_URL__ || "/matchup-data";
 
-let trackerData = embeddedTrophyData;
-let matchupData = embeddedMatchupData;
+let trackerData = {};
+let matchupData = {};
 let activeTrophyCard = null;
 let activeLeaderboardRow = null;
 let activeMatchupIndex = -1;
 let matchupSortKey = "FP";
 let matchupSortDirection = "desc";
-let activeTopBoardTab = "matchup";
+let activeTopBoardTab = "leaderboard";
 let matchupTableScrollLeft = 0;
 let matchupScrollRestoreTimers = [];
 
@@ -762,27 +760,20 @@ function renderTrophies(seasonKey) {
 }
 
 async function loadTrackerData() {
-  if (window.location.protocol === "file:") {
-    trackerData = embeddedTrophyData;
-    matchupData = embeddedMatchupData;
-  } else {
-    try {
-      const [trophyResponse, matchupResponse] = await Promise.all([
-        fetch(trophyDataUrl, { cache: "no-store" }),
-        fetch(matchupDataUrl, { cache: "no-store" }),
-      ]);
+  const [trophyResponse, matchupResponse] = await Promise.all([
+    fetch(trophyDataUrl, { cache: "no-store" }),
+    fetch(matchupDataUrl, { cache: "no-store" }),
+  ]);
 
-      if (!trophyResponse.ok) {
-        throw new Error(`Failed to load trophy data (${trophyResponse.status})`);
-      }
-
-      trackerData = await trophyResponse.json();
-      matchupData = matchupResponse.ok ? await matchupResponse.json() : embeddedMatchupData;
-    } catch (error) {
-      trackerData = embeddedTrophyData;
-      matchupData = embeddedMatchupData;
-    }
+  if (!trophyResponse.ok) {
+    throw new Error(`Failed to load trophy data (${trophyResponse.status})`);
   }
+  if (!matchupResponse.ok) {
+    throw new Error(`Failed to load matchup data (${matchupResponse.status})`);
+  }
+
+  trackerData = await trophyResponse.json();
+  matchupData = await matchupResponse.json();
 
   const seasonSet = new Set([
     ...Object.keys(trackerData.season || {}),
@@ -792,8 +783,8 @@ async function loadTrackerData() {
 
   if (!seasons.length) {
     seasonSelect.innerHTML = "<option value=''>No seasons available</option>";
-    matchupBoard.innerHTML = '<div class="empty-state">No matchup data was loaded from the local snapshots.</div>';
-    trophyGrid.innerHTML = '<div class="empty-state">No trophy data was loaded from the local snapshots.</div>';
+    matchupBoard.innerHTML = '<div class="empty-state">No matchup data was returned from Cloudflare.</div>';
+    trophyGrid.innerHTML = '<div class="empty-state">No trophy data was returned from Cloudflare.</div>';
     return;
   }
 

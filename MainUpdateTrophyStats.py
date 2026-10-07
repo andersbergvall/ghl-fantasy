@@ -8,7 +8,7 @@ import io
 import json
 import math
 import os
-import subprocess
+from urllib.parse import quote
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -18,13 +18,10 @@ import requests
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent
-DRAFT_RESULTS_CSV = PROJECT_ROOT / "DraftResults.csv"
-CALDER_CANDIDATES_CSV = PROJECT_ROOT / "CalderCandidates.csv"
-FANTALYTICS_FRENZY_CSV = PROJECT_ROOT / "FantalyticsFrenzy.csv"
-TROPHY_DATA_JSON = PROJECT_ROOT / "trophy-data.json"
-TROPHY_DATA_JS = PROJECT_ROOT / "trophy-data.js"
-MATCHUP_DATA_JSON = PROJECT_ROOT / "matchup-data.json"
-MATCHUP_DATA_JS = PROJECT_ROOT / "matchup-data.js"
+INPUT_CSV_DIR = PROJECT_ROOT / "trophy_input_csv" / "2026-2027"
+DRAFT_RESULTS_CSV = INPUT_CSV_DIR / "DraftResults.csv"
+CALDER_CANDIDATES_CSV = INPUT_CSV_DIR / "CalderCandidates.csv"
+FANTALYTICS_FRENZY_CSV = INPUT_CSV_DIR / "FantalyticsFrenzy.csv"
 
 DEFAULT_LEAGUE_ID = "aer4wi7rmtgxmer0"
 FANTRAX_PLAYER_STATS_URL = "https://www.fantrax.com/fxpa/downloadPlayerStats"
@@ -1339,105 +1336,6 @@ def buildSeasonTrophyJson(
     return {"season": season_data}
 
 
-def write_local_trophy_data(payload: Dict[str, Any]) -> None:
-    json_text = json.dumps(payload, ensure_ascii=False, indent=2)
-    TROPHY_DATA_JSON.write_text(json_text + "\n", encoding="utf-8")
-    TROPHY_DATA_JS.write_text(
-        "window.__GHL_TROPHY_DATA__ = " + json_text + ";\n",
-        encoding="utf-8",
-    )
-
-
-def write_local_matchup_data(payload: Dict[str, Any]) -> None:
-    json_text = json.dumps(payload, ensure_ascii=False, indent=2)
-    MATCHUP_DATA_JSON.write_text(json_text + "\n", encoding="utf-8")
-    MATCHUP_DATA_JS.write_text(
-        "window.__GHL_MATCHUP_DATA__ = " + json_text + ";\n",
-        encoding="utf-8",
-    )
-
-
-def sync_local_tracker_data_to_git() -> None:
-    """Stage, commit, and push generated snapshot files if they changed."""
-    git_add = subprocess.run(
-        [
-            "git",
-            "add",
-            str(TROPHY_DATA_JSON),
-            str(TROPHY_DATA_JS),
-            str(MATCHUP_DATA_JSON),
-            str(MATCHUP_DATA_JS),
-        ],
-        cwd=PROJECT_ROOT,
-        check=False,
-        capture_output=True,
-        text=True,
-    )
-    if git_add.returncode != 0:
-        raise RuntimeError((git_add.stderr or git_add.stdout or "git add failed").strip())
-
-    diff_check = subprocess.run(
-        ["git", "diff", "--cached", "--quiet"],
-        cwd=PROJECT_ROOT,
-        check=False,
-    )
-    if diff_check.returncode == 0:
-        return
-    if diff_check.returncode not in (0, 1):
-        raise RuntimeError("git diff --cached --quiet failed")
-
-    git_name = subprocess.run(
-        ["git", "config", "user.name"],
-        cwd=PROJECT_ROOT,
-        check=False,
-        capture_output=True,
-        text=True,
-    )
-    git_email = subprocess.run(
-        ["git", "config", "user.email"],
-        cwd=PROJECT_ROOT,
-        check=False,
-        capture_output=True,
-        text=True,
-    )
-    if not git_name.stdout.strip():
-        subprocess.run(
-            ["git", "config", "user.name", os.getenv("TROPHY_TRACKER_GIT_USER_NAME", "github-actions[bot]")],
-            cwd=PROJECT_ROOT,
-            check=False,
-        )
-    if not git_email.stdout.strip():
-        subprocess.run(
-            ["git", "config", "user.email", os.getenv("TROPHY_TRACKER_GIT_USER_EMAIL", "github-actions[bot]@users.noreply.github.com")],
-            cwd=PROJECT_ROOT,
-            check=False,
-        )
-
-    commit_message = os.getenv("TROPHY_TRACKER_GIT_COMMIT_MESSAGE", "Update trophy and matchup snapshots")
-    git_commit = subprocess.run(
-        ["git", "commit", "-m", commit_message],
-        cwd=PROJECT_ROOT,
-        check=False,
-        capture_output=True,
-        text=True,
-    )
-    if git_commit.returncode != 0:
-        output = (git_commit.stderr or git_commit.stdout or "git commit failed").strip()
-        if "nothing to commit" in output.lower():
-            return
-        raise RuntimeError(output)
-
-    git_push = subprocess.run(
-        ["git", "push"],
-        cwd=PROJECT_ROOT,
-        check=False,
-        capture_output=True,
-        text=True,
-    )
-    if git_push.returncode != 0:
-        raise RuntimeError((git_push.stderr or git_push.stdout or "git push failed").strip())
-
-
 def load_env_file(path: str | None = None) -> Dict[str, str]:
     """Load key=value pairs from a local env file into the current process environment.
 
@@ -1509,6 +1407,67 @@ def patch_jsonbin_trophies(payload: Dict[str, Any], env_path: str | None = None)
     return response.json()
 
 
+def patch_cloudflare_kv_value(namespace_id: str, key: str, payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Write one JSON payload to a Cloudflare KV namespace key."""
+    account_id = os.getenv("CLOUDFLARE_ACCOUNT_ID", "").strip()
+    api_token = os.getenv("CLOUDFLARE_API_TOKEN", "").strip()
+
+    if not account_id:
+        raise ValueError("Missing CLOUDFLARE_ACCOUNT_ID in the environment.")
+    if not api_token:
+        raise ValueError("Missing CLOUDFLARE_API_TOKEN in the environment.")
+    if not namespace_id:
+        raise ValueError("Cloudflare KV namespace id is empty.")
+
+    safe_key = quote(str(key).strip(), safe="")
+    url = f"https://api.cloudflare.com/client/v4/accounts/{account_id}/storage/kv/namespaces/{namespace_id}/values/{safe_key}"
+    headers = {
+        "Authorization": f"Bearer {api_token}",
+        "Content-Type": "application/json",
+    }
+
+    response = requests.put(
+        url,
+        headers=headers,
+        data=json.dumps(payload, ensure_ascii=False),
+        timeout=30,
+    )
+
+    if response.status_code in (401, 403, 404):
+        raise PermissionError(
+            "Cloudflare KV write failed. Check CLOUDFLARE_ACCOUNT_ID, CLOUDFLARE_API_TOKEN, and namespace id values."
+        )
+    response.raise_for_status()
+
+    return {
+        "namespace_id": namespace_id,
+        "key": key,
+        "status_code": response.status_code,
+        "ok": response.ok,
+    }
+
+
+def publish_cloudflare_kv_snapshots(trophy_payload: Dict[str, Any], matchup_payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Publish both tracker snapshots to Cloudflare KV."""
+    trophy_namespace_id = os.getenv("CLOUDFLARE_KV_NAMESPACE_ID_TROPHY_DATA", "").strip()
+    matchup_namespace_id = os.getenv("CLOUDFLARE_KV_NAMESPACE_ID_MATCHUP_DATA", "").strip()
+    trophy_key = os.getenv("CLOUDFLARE_KV_KEY_TROPHY_DATA", "trophy-data").strip() or "trophy-data"
+    matchup_key = os.getenv("CLOUDFLARE_KV_KEY_MATCHUP_DATA", "matchup-data").strip() or "matchup-data"
+
+    if not trophy_namespace_id:
+        raise ValueError("Missing CLOUDFLARE_KV_NAMESPACE_ID_TROPHY_DATA in the environment.")
+    if not matchup_namespace_id:
+        raise ValueError("Missing CLOUDFLARE_KV_NAMESPACE_ID_MATCHUP_DATA in the environment.")
+
+    trophy_result = patch_cloudflare_kv_value(trophy_namespace_id, trophy_key, trophy_payload)
+    matchup_result = patch_cloudflare_kv_value(matchup_namespace_id, matchup_key, matchup_payload)
+
+    return {
+        "trophy-data": trophy_result,
+        "matchup-data": matchup_result,
+    }
+
+
 if __name__ == "__main__":
     load_env_file()
     league_id = os.getenv("FANTRAX_LEAGUE_ID", DEFAULT_LEAGUE_ID)
@@ -1523,17 +1482,15 @@ if __name__ == "__main__":
         standings_tables=standings_tables,
     )
     matchup_json = build_matchup_data_json(league_id=league_id, weeks_in_season=season_weeks, season_key="2026-2027")
-    write_local_trophy_data(final_json)
-    write_local_matchup_data(matchup_json)
-    if os.getenv("TROPHY_TRACKER_SYNC_GIT", "1").strip().lower() in {"1", "true", "yes", "on"}:
-        sync_local_tracker_data_to_git()
-#    print(json.dumps(final_json, ensure_ascii=False, indent=2))
 
-#    should_publish = os.getenv("PUBLISH_TO_JSONBIN", "0").strip().lower() in {"1", "true", "yes", "on"}
-#    should_publish = "true"
-    # if should_publish:
-    #     try:
-    #         patch_result = patch_jsonbin_trophies(final_json)
-    #         print(json.dumps({"jsonbin": patch_result}, ensure_ascii=False, indent=2))
-    #     except Exception as exc:
-    #         raise RuntimeError(f"JSONBin publish failed: {exc}") from exc
+
+    should_publish_cloudflare_kv = os.getenv("PUBLISH_TO_CLOUDFLARE_KV", "0").strip().lower() in {"1", "true", "yes", "on"}
+
+    # print(json.dumps(final_json, ensure_ascii=False, indent=2))
+    # print(json.dumps(matchup_json, ensure_ascii=False, indent=2))
+    # should_publish_cloudflare_kv = False
+
+    if should_publish_cloudflare_kv:
+        cloudflare_result = publish_cloudflare_kv_snapshots(final_json, matchup_json)
+        print(json.dumps({"cloudflare_kv": cloudflare_result}, ensure_ascii=False, indent=2))
+
