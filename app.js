@@ -71,6 +71,7 @@ let draftClassPageIndex = 0;
 let draftClassRoundFilter = "ALL";
 let draftClassPositionFilter = "ALL";
 let draftClassFantasyTeamFilter = "ALL";
+let draftClassNhlTeamFilter = "ALL";
 let activeTopBoardTab = "leaderboard";
 let matchupTableScrollLeft = 0;
 let draftClassTableScrollLeft = 0;
@@ -491,6 +492,8 @@ const draftClassColumns = [
   { key: "FP/G RK", label: "FP/G RK", type: "string" },
   { key: "ROS", label: "ROS", type: "number" },
   { key: "VABO", label: "VABO", type: "number" },
+  { key: "Fantasy Team", label: "FANTASY TEAM", type: "string" },
+  { key: "NHLTEAM", label: "NHLTEAM", type: "string" },
 ];
 
 const draftClassColumnWidths = {
@@ -504,6 +507,8 @@ const draftClassColumnWidths = {
   "FP/G RK": 68,
   ROS: 58,
   VABO: 70,
+  "Fantasy Team": 108,
+  NHLTEAM: 62,
 };
 
 function getDraftClassRows(seasonKey) {
@@ -569,10 +574,13 @@ function getDraftClassFilteredRows(seasonKey) {
     const positionBucket = getDraftClassPositionBucket(positionValue);
     const positionMatch = draftClassPositionFilter === "ALL" || positionBucket === draftClassPositionFilter;
 
-    const teamValue = String(row?.["Fantasy Team"] || "").trim();
-    const teamMatch = draftClassFantasyTeamFilter === "ALL" || teamValue === draftClassFantasyTeamFilter;
+    const fantasyTeamValue = String(row?.["Fantasy Team"] || "").trim();
+    const fantasyTeamMatch = draftClassFantasyTeamFilter === "ALL" || fantasyTeamValue === draftClassFantasyTeamFilter;
 
-    return roundMatch && positionMatch && teamMatch;
+    const nhlTeamValue = String(row?.NHLTEAM || row?.TEAM || row?.["Team"] || "").trim();
+    const nhlTeamMatch = draftClassNhlTeamFilter === "ALL" || nhlTeamValue === draftClassNhlTeamFilter;
+
+    return roundMatch && positionMatch && fantasyTeamMatch && nhlTeamMatch;
   });
 }
 
@@ -661,8 +669,12 @@ function renderDraftClassBoard(seasonKey) {
     .map((positionKey) => `<option value="${positionKey}" ${draftClassPositionFilter === positionKey ? "selected" : ""}>${positionKey === "ALL" ? "All" : positionKey}</option>`)
     .join("");
 
-  const teamOptions = ["ALL", ...Array.from(new Set(getDraftClassRows(seasonKey).map((row) => String(row?.["Fantasy Team"] || "").trim()).filter(Boolean))).sort((left, right) => left.localeCompare(right))]
+  const fantasyTeamOptions = ["ALL", ...Array.from(new Set(getDraftClassRows(seasonKey).map((row) => String(row?.["Fantasy Team"] || "").trim()).filter(Boolean))).sort((left, right) => left.localeCompare(right))]
     .map((teamKey) => `<option value="${teamKey}" ${draftClassFantasyTeamFilter === teamKey ? "selected" : ""}>${teamKey === "ALL" ? "All Teams" : teamKey}</option>`)
+    .join("");
+
+  const nhlTeamOptions = ["ALL", ...Array.from(new Set(getDraftClassRows(seasonKey).map((row) => String(row?.NHLTEAM || row?.TEAM || row?.["Team"] || "").trim()).filter(Boolean))).sort((left, right) => left.localeCompare(right))]
+    .map((teamKey) => `<option value="${teamKey}" ${draftClassNhlTeamFilter === teamKey ? "selected" : ""}>${teamKey === "ALL" ? "All NHL Teams" : teamKey}</option>`)
     .join("");
 
   const headerCells = draftClassColumns
@@ -728,7 +740,13 @@ function renderDraftClassBoard(seasonKey) {
             <label class="draft-class-select-wrap">
               <span class="filter-group-label">Fantasy Team</span>
               <select class="draft-class-select" data-team-filter>
-                ${teamOptions}
+                ${fantasyTeamOptions}
+              </select>
+            </label>
+            <label class="draft-class-select-wrap">
+              <span class="filter-group-label">NHL Team</span>
+              <select class="draft-class-select" data-nhlteam-filter>
+                ${nhlTeamOptions}
               </select>
             </label>
             <div class="draft-class-vabo-note">VABO = F: Value Above Round Average. D &amp; G: Value Above Average full sample.</div>
@@ -739,7 +757,7 @@ function renderDraftClassBoard(seasonKey) {
       <div class="matchup-table-wrap draft-class-table-wrap">
         <table class="matchup-table draft-class-table">
           <thead><tr>${headerCells}</tr></thead>
-          <tbody>${bodyRows || '<tr><td colspan="10">No players match the current filters.</td></tr>'}</tbody>
+          <tbody>${bodyRows || '<tr><td colspan="12">No players match the current filters.</td></tr>'}</tbody>
         </table>
       </div>
     </section>
@@ -767,6 +785,12 @@ function renderDraftClassBoard(seasonKey) {
 
   draftClassPane.querySelector("[data-team-filter]")?.addEventListener("change", (event) => {
     draftClassFantasyTeamFilter = event.target.value || "ALL";
+    draftClassPageIndex = 0;
+    renderDraftClassBoard(seasonKey);
+  });
+
+  draftClassPane.querySelector("[data-nhlteam-filter]")?.addEventListener("change", (event) => {
+    draftClassNhlTeamFilter = event.target.value || "ALL";
     draftClassPageIndex = 0;
     renderDraftClassBoard(seasonKey);
   });

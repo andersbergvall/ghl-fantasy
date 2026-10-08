@@ -905,11 +905,15 @@ def build_drafted_player_stats_json(
         player_name = normalize_fantrax_text(str(draft_row.get("Player", "")).strip())
         raw_pos = str(draft_row.get("Pos", "")).strip().upper()
         fantasy_team = normalize_fantrax_text(str(draft_row.get("Fantasy Team", "")).strip())
+
+        stats = stats_by_id.get(player_id, {})
+        nhl_team = normalize_fantrax_text(str(stats.get("Team", "")).strip())
+        if not nhl_team:
+            nhl_team = normalize_fantrax_text(str(draft_row.get("Team", "")).strip())
+
         normalized_round = normalize_round_value(draft_row.get("Round"))
         is_keeper = source_type == "calder" or normalized_round == "K"
         round_label = "K" if is_keeper else normalized_round
-
-        stats = stats_by_id.get(player_id, {})
         try:
             fpts = float(stats.get("FPts", 0.0)) if stats else 0.0
         except (TypeError, ValueError):
@@ -940,6 +944,7 @@ def build_drafted_player_stats_json(
                 "PLAYER": player_name,
                 "POS": raw_pos or get_position_bucket(draft_row.get("Pos")),
                 "Fantasy Team": fantasy_team,
+                "NHLTEAM": nhl_team,
                 "ROUND": round_label,
                 "FP": round(fpts, 2),
                 "FP RK": "",
@@ -1670,7 +1675,7 @@ if __name__ == "__main__":
     # print(json.dumps(final_json, ensure_ascii=False, indent=2))
     # print(json.dumps(matchup_json, ensure_ascii=False, indent=2))
     # should_publish_cloudflare_kv = False
-    # should_publish_cloudflare_kv = True
+    should_publish_cloudflare_kv = True
 
     if should_publish_cloudflare_kv:
         cloudflare_result = publish_cloudflare_kv_snapshots(final_json, matchup_json, draft_class_json)
