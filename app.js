@@ -490,6 +490,7 @@ const draftClassColumns = [
   { key: "FP/G", label: "FP/G", type: "number" },
   { key: "FP/G RK", label: "FP/G RK", type: "string" },
   { key: "ROS", label: "ROS", type: "number" },
+  { key: "VABO", label: "VABO", type: "number" },
 ];
 
 const draftClassColumnWidths = {
@@ -502,6 +503,7 @@ const draftClassColumnWidths = {
   "FP/G": 64,
   "FP/G RK": 68,
   ROS: 58,
+  VABO: 70,
 };
 
 function getDraftClassRows(seasonKey) {
@@ -534,6 +536,10 @@ function formatDraftClassCell(column, value) {
     }
     if (column.key === "PICK") {
       return String(Math.round(numeric));
+    }
+    if (column.key === "VABO") {
+      const formatted = numeric.toFixed(2);
+      return numeric > 0 ? `+${formatted}` : formatted;
     }
     return numeric.toFixed(2);
   }
@@ -665,14 +671,18 @@ function renderDraftClassBoard(seasonKey) {
       const indicator = isActive ? (draftClassSortDirection === "asc" ? "↑" : "↓") : "↕";
       const columnWidth = draftClassColumnWidths[column.key];
       const widthStyle = columnWidth ? `style="width:${columnWidth}px; min-width:${columnWidth}px;"` : "";
-      return `<th ${widthStyle}><button class="matchup-sort${isActive ? " is-active" : ""}" data-draft-column="${column.key}" type="button"><span class="matchup-sort-label">${column.label}</span><span class="matchup-sort-indicator">${indicator}</span></button></th>`;
+      const highlightHeader = column.key === "PICK" || column.key === "ROUND" ? " table-highlight-header" : "";
+      return `<th class="${highlightHeader.trim() || ""}" ${widthStyle}><button class="matchup-sort${isActive ? " is-active" : ""}" data-draft-column="${column.key}" type="button"><span class="matchup-sort-label">${column.label}</span><span class="matchup-sort-indicator">${indicator}</span></button></th>`;
     })
     .join("");
 
   const bodyRows = pageRows
     .map((row) => {
       const cells = draftClassColumns
-        .map((column) => `<td>${formatDraftClassCell(column, getDraftClassCellValue(row, column.key))}</td>`)
+        .map((column) => {
+          const highlightCell = column.key === "PICK" || column.key === "ROUND" ? " table-highlight" : "";
+          return `<td class="${highlightCell.trim() || ""}">${formatDraftClassCell(column, getDraftClassCellValue(row, column.key))}</td>`;
+        })
         .join("");
       return `<tr>${cells}</tr>`;
     })
@@ -713,20 +723,23 @@ function renderDraftClassBoard(seasonKey) {
             </select>
           </label>
         </div>
-        <div class="draft-class-filter-group">
-          <label class="draft-class-select-wrap">
-            <span class="filter-group-label">Fantasy Team</span>
-            <select class="draft-class-select" data-team-filter>
-              ${teamOptions}
-            </select>
-          </label>
+        <div class="draft-class-filter-group draft-class-team-group">
+          <div class="draft-class-team-filter-row">
+            <label class="draft-class-select-wrap">
+              <span class="filter-group-label">Fantasy Team</span>
+              <select class="draft-class-select" data-team-filter>
+                ${teamOptions}
+              </select>
+            </label>
+            <div class="draft-class-vabo-note">VABO = F: Value Above Round Average. D &amp; G: Value Above Average full sample.</div>
+          </div>
         </div>
       </div>
 
       <div class="matchup-table-wrap draft-class-table-wrap">
         <table class="matchup-table draft-class-table">
           <thead><tr>${headerCells}</tr></thead>
-          <tbody>${bodyRows || '<tr><td colspan="9">No players match the current filters.</td></tr>'}</tbody>
+          <tbody>${bodyRows || '<tr><td colspan="10">No players match the current filters.</td></tr>'}</tbody>
         </table>
       </div>
     </section>
@@ -825,13 +838,19 @@ function renderMatchupBoard(seasonKey) {
     .map((column) => {
       const isActive = matchupSortKey === column.key;
       const indicator = isActive ? (matchupSortDirection === "asc" ? "↑" : "↓") : "↕";
-      return `<th><button class="matchup-sort${isActive ? " is-active" : ""}" data-column="${column.key}" type="button"><span class="matchup-sort-label">${column.label}</span><span class="matchup-sort-indicator">${indicator}</span></button></th>`;
+      const highlightHeader = column.key === "FP" || column.key === "FP/G" ? " table-highlight-header" : "";
+      return `<th class="${highlightHeader.trim() || ""}"><button class="matchup-sort${isActive ? " is-active" : ""}" data-column="${column.key}" type="button"><span class="matchup-sort-label">${column.label}</span><span class="matchup-sort-indicator">${indicator}</span></button></th>`;
     })
     .join("");
 
   const bodyRows = sortedRows
     .map((row) => {
-      const cells = matchupColumns.map((column) => `<td>${formatMatchupCell(column, getMatchupCellValue(row, column.key))}</td>`).join("");
+      const cells = matchupColumns
+        .map((column) => {
+          const highlightCell = column.key === "FP" || column.key === "FP/G" ? " table-highlight" : "";
+          return `<td class="${highlightCell.trim() || ""}">${formatMatchupCell(column, getMatchupCellValue(row, column.key))}</td>`;
+        })
+        .join("");
       return `<tr>${cells}</tr>`;
     })
     .join("");

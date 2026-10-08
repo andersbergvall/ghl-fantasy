@@ -946,6 +946,7 @@ def build_drafted_player_stats_json(
                 "FP/G": round(fp_per_game, 2),
                 "FP/G RK": "",
                 "ROS": round(ros, 2),
+                "VABO": 0.0,
                 "_sort_fp": fpts,
                 "_sort_fp_per_game": fp_per_game,
                 "_sort_round": round_label,
@@ -967,6 +968,36 @@ def build_drafted_player_stats_json(
 
     for row in ranked_rows:
         row["FP/G RK"] = fp_per_game_rank_lookup.get(row["_player_id"], "")
+
+    f_round_groups: Dict[str, List[float]] = {}
+    g_values: List[float] = []
+    d_values: List[float] = []
+    for row in ranked_rows:
+        position_bucket = get_position_bucket(row.get("POS", ""))
+        fp_per_game_value = float(row.get("FP/G", 0.0) or 0.0)
+        if position_bucket == "F":
+            f_round_groups.setdefault(str(row.get("ROUND", "")), []).append(fp_per_game_value)
+        elif position_bucket == "G":
+            g_values.append(fp_per_game_value)
+        elif position_bucket == "D":
+            d_values.append(fp_per_game_value)
+
+    for row in ranked_rows:
+        position_bucket = get_position_bucket(row.get("POS", ""))
+        fp_per_game_value = float(row.get("FP/G", 0.0) or 0.0)
+
+        if position_bucket == "F":
+            round_values = f_round_groups.get(str(row.get("ROUND", "")), [])
+            round_average = sum(round_values) / len(round_values) if round_values else 0.0
+            row["VABO"] = round(fp_per_game_value - round_average, 2)
+        elif position_bucket == "G":
+            group_average = sum(g_values) / len(g_values) if g_values else 0.0
+            row["VABO"] = round(fp_per_game_value - group_average, 2)
+        elif position_bucket == "D":
+            group_average = sum(d_values) / len(d_values) if d_values else 0.0
+            row["VABO"] = round(fp_per_game_value - group_average, 2)
+        else:
+            row["VABO"] = 0.0
 
     for row in ranked_rows:
         row.pop("_sort_fp", None)

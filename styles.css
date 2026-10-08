@@ -17,6 +17,7 @@
   --silver: #c4d0dd;
   --red: #ff7b7b;
   --green: #6fe2b0;
+  --text-accent: #f6b86d;
 }
 
 * {
@@ -30,11 +31,14 @@ html {
 body {
   margin: 0;
   min-height: 100vh;
-  font-family: "Inter", sans-serif;
+  font-family: "Inter", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
   background:
     radial-gradient(circle at top left, rgba(125, 182, 255, 0.18), transparent 24%),
     linear-gradient(180deg, #09111d 0%, #101a2b 100%);
   color: var(--text);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
 }
 
 .page-shell {
@@ -445,6 +449,20 @@ select {
   gap: 4px;
 }
 
+.draft-class-team-filter-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+.draft-class-vabo-note {
+  font-size: 0.56rem;
+  font-style: italic;
+  color: var(--muted);
+  line-height: 1.3;
+  margin-bottom: 4px;
+}
+
 .draft-class-select-wrap {
   display: flex;
   flex-direction: column;
@@ -533,10 +551,11 @@ select {
   width: 100%;
   border-collapse: collapse;
   min-width: 900px;
-  font-family: "Inter", sans-serif;
+  font-family: "Inter", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
   font-variant-numeric: tabular-nums;
   font-feature-settings: "tnum" 1, "lnum" 1;
-  font-size: 0.72rem;
+  font-size: 0.68rem;
+  letter-spacing: 0.01em;
 }
 
 .draft-class-table {
@@ -549,9 +568,14 @@ select {
   position: sticky;
   top: 0;
   z-index: 2;
-  background: rgba(9, 13, 21, 0.96);
+  background: linear-gradient(180deg, rgba(14, 22, 34, 0.98), rgba(9, 13, 21, 0.98));
   backdrop-filter: blur(6px);
   box-shadow: inset 0 -1px 0 rgba(148, 163, 184, 0.12);
+  color: var(--sweater);
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
 }
 
 .matchup-table thead th:first-child,
@@ -592,8 +616,9 @@ select {
 .matchup-table td {
   border-bottom: 1px solid rgba(148, 163, 184, 0.12);
   padding: 4px 6px;
-  font-size: 0.72rem;
+  font-size: 0.68rem;
   white-space: nowrap;
+  color: var(--text);
 }
 
 .draft-class-table th,
@@ -601,11 +626,14 @@ select {
   width: auto;
   padding-left: 5px;
   padding-right: 5px;
+  font-weight: 600;
+  color: var(--text);
 }
 
 .matchup-table td {
   color: var(--text);
   letter-spacing: 0.01em;
+  font-weight: 600;
 }
 
 .matchup-sort {
@@ -617,9 +645,9 @@ select {
   border: 0;
   background: transparent;
   color: var(--muted);
-  font-size: 0.62rem;
+  font-size: 0.6rem;
   font-weight: 800;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
   text-align: left;
   cursor: pointer;
@@ -632,6 +660,13 @@ select {
 
 .matchup-sort.is-active {
   color: var(--ice);
+  text-shadow: 0 0 22px rgba(125, 182, 255, 0.28);
+}
+
+.table-highlight,
+.table-highlight-header {
+  color: var(--text-accent);
+  font-weight: 700;
 }
 
 .matchup-sort-indicator {
