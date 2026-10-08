@@ -68,8 +68,9 @@ let matchupSortDirection = "desc";
 let draftClassSortKey = "PICK";
 let draftClassSortDirection = "asc";
 let draftClassPageIndex = 0;
-let draftClassRoundFilters = new Set();
-let draftClassPositionFilters = new Set();
+let draftClassRoundFilter = "ALL";
+let draftClassPositionFilter = "ALL";
+let draftClassFantasyTeamFilter = "ALL";
 let activeTopBoardTab = "leaderboard";
 let matchupTableScrollLeft = 0;
 let draftClassTableScrollLeft = 0;
@@ -492,15 +493,15 @@ const draftClassColumns = [
 ];
 
 const draftClassColumnWidths = {
-  PICK: 58,
-  ROUND: 58,
-  PLAYER: 190,
-  POS: 54,
-  FP: 68,
-  "FP RK": 74,
-  "FP/G": 76,
-  "FP/G RK": 82,
-  ROS: 70,
+  PICK: 34,
+  ROUND: 38,
+  PLAYER: 122,
+  POS: 46,
+  FP: 58,
+  "FP RK": 62,
+  "FP/G": 64,
+  "FP/G RK": 68,
+  ROS: 58,
 };
 
 function getDraftClassRows(seasonKey) {
@@ -556,16 +557,16 @@ function getDraftClassFilteredRows(seasonKey) {
 
   return rows.filter((row) => {
     const roundValue = String(row?.ROUND || row?.Round || "").trim();
-    const roundMatch =
-      !draftClassRoundFilters.size ||
-      draftClassRoundFilters.has(roundValue) ||
-      (draftClassRoundFilters.has("K") && roundValue === "K");
+    const roundMatch = draftClassRoundFilter === "ALL" || roundValue === draftClassRoundFilter;
 
     const positionValue = String(row?.POS || "").trim().toUpperCase();
     const positionBucket = getDraftClassPositionBucket(positionValue);
-    const positionMatch = !draftClassPositionFilters.size || draftClassPositionFilters.has(positionBucket);
+    const positionMatch = draftClassPositionFilter === "ALL" || positionBucket === draftClassPositionFilter;
 
-    return roundMatch && positionMatch;
+    const teamValue = String(row?.["Fantasy Team"] || "").trim();
+    const teamMatch = draftClassFantasyTeamFilter === "ALL" || teamValue === draftClassFantasyTeamFilter;
+
+    return roundMatch && positionMatch && teamMatch;
   });
 }
 
@@ -646,21 +647,16 @@ function renderDraftClassBoard(seasonKey) {
   const endIndex = Math.min(startIndex + pageSize, draftRows.length);
   const pageRows = draftRows.slice(startIndex, endIndex);
 
-  const roundButtons = [
-    ...Array.from({ length: 21 }, (_, index) => `R${index + 1}`),
-    "K",
-  ]
-    .map((roundKey) => {
-      const isActive = draftClassRoundFilters.has(roundKey);
-      return `<button class="filter-chip ${isActive ? "is-active" : ""}" data-round="${roundKey}" type="button">${roundKey}</button>`;
-    })
+  const roundOptions = ["ALL", ...Array.from({ length: 21 }, (_, index) => `R${index + 1}`), "K"]
+    .map((roundKey) => `<option value="${roundKey}" ${draftClassRoundFilter === roundKey ? "selected" : ""}>${roundKey === "ALL" ? "All" : roundKey}</option>`)
     .join("");
 
-  const positionButtons = ["D", "G", "F"]
-    .map((positionKey) => {
-      const isActive = draftClassPositionFilters.has(positionKey);
-      return `<button class="filter-chip ${isActive ? "is-active" : ""}" data-position="${positionKey}" type="button">${positionKey}</button>`;
-    })
+  const positionOptions = ["ALL", "D", "G", "F"]
+    .map((positionKey) => `<option value="${positionKey}" ${draftClassPositionFilter === positionKey ? "selected" : ""}>${positionKey === "ALL" ? "All" : positionKey}</option>`)
+    .join("");
+
+  const teamOptions = ["ALL", ...Array.from(new Set(getDraftClassRows(seasonKey).map((row) => String(row?.["Fantasy Team"] || "").trim()).filter(Boolean))).sort((left, right) => left.localeCompare(right))]
+    .map((teamKey) => `<option value="${teamKey}" ${draftClassFantasyTeamFilter === teamKey ? "selected" : ""}>${teamKey === "ALL" ? "All Teams" : teamKey}</option>`)
     .join("");
 
   const headerCells = draftClassColumns
@@ -702,12 +698,28 @@ function renderDraftClassBoard(seasonKey) {
 
       <div class="draft-class-toolbar">
         <div class="draft-class-filter-group">
-          <span class="filter-group-label">RD</span>
-          <div class="filter-chip-row">${roundButtons}</div>
+          <label class="draft-class-select-wrap">
+            <span class="filter-group-label">RD</span>
+            <select class="draft-class-select" data-round-filter>
+              ${roundOptions}
+            </select>
+          </label>
         </div>
         <div class="draft-class-filter-group">
-          <span class="filter-group-label">Position</span>
-          <div class="filter-chip-row">${positionButtons}</div>
+          <label class="draft-class-select-wrap">
+            <span class="filter-group-label">Position</span>
+            <select class="draft-class-select" data-position-filter>
+              ${positionOptions}
+            </select>
+          </label>
+        </div>
+        <div class="draft-class-filter-group">
+          <label class="draft-class-select-wrap">
+            <span class="filter-group-label">Fantasy Team</span>
+            <select class="draft-class-select" data-team-filter>
+              ${teamOptions}
+            </select>
+          </label>
         </div>
       </div>
 
@@ -728,36 +740,22 @@ function renderDraftClassBoard(seasonKey) {
     });
   }
 
-  draftClassPane.querySelectorAll(".filter-chip[data-round]").forEach((button) => {
-    button.addEventListener("click", () => {
-      const roundKey = button.getAttribute("data-round");
-      if (!roundKey) {
-        return;
-      }
-      if (draftClassRoundFilters.has(roundKey)) {
-        draftClassRoundFilters.delete(roundKey);
-      } else {
-        draftClassRoundFilters.add(roundKey);
-      }
-      draftClassPageIndex = 0;
-      renderDraftClassBoard(seasonKey);
-    });
+  draftClassPane.querySelector("[data-round-filter]")?.addEventListener("change", (event) => {
+    draftClassRoundFilter = event.target.value || "ALL";
+    draftClassPageIndex = 0;
+    renderDraftClassBoard(seasonKey);
   });
 
-  draftClassPane.querySelectorAll(".filter-chip[data-position]").forEach((button) => {
-    button.addEventListener("click", () => {
-      const positionKey = button.getAttribute("data-position");
-      if (!positionKey) {
-        return;
-      }
-      if (draftClassPositionFilters.has(positionKey)) {
-        draftClassPositionFilters.delete(positionKey);
-      } else {
-        draftClassPositionFilters.add(positionKey);
-      }
-      draftClassPageIndex = 0;
-      renderDraftClassBoard(seasonKey);
-    });
+  draftClassPane.querySelector("[data-position-filter]")?.addEventListener("change", (event) => {
+    draftClassPositionFilter = event.target.value || "ALL";
+    draftClassPageIndex = 0;
+    renderDraftClassBoard(seasonKey);
+  });
+
+  draftClassPane.querySelector("[data-team-filter]")?.addEventListener("change", (event) => {
+    draftClassFantasyTeamFilter = event.target.value || "ALL";
+    draftClassPageIndex = 0;
+    renderDraftClassBoard(seasonKey);
   });
 
   draftClassPane.querySelectorAll(".matchup-nav-btn[data-draft-direction]").forEach((button) => {

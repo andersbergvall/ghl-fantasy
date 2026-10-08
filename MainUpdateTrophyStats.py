@@ -904,6 +904,7 @@ def build_drafted_player_stats_json(
         source_type = str(draft_row.get("_source", "draft")).strip().lower()
         player_name = normalize_fantrax_text(str(draft_row.get("Player", "")).strip())
         raw_pos = str(draft_row.get("Pos", "")).strip().upper()
+        fantasy_team = normalize_fantrax_text(str(draft_row.get("Fantasy Team", "")).strip())
         normalized_round = normalize_round_value(draft_row.get("Round"))
         is_keeper = source_type == "calder" or normalized_round == "K"
         round_label = "K" if is_keeper else normalized_round
@@ -938,6 +939,7 @@ def build_drafted_player_stats_json(
                 "PICK": pick_value_final,
                 "PLAYER": player_name,
                 "POS": raw_pos or get_position_bucket(draft_row.get("Pos")),
+                "Fantasy Team": fantasy_team,
                 "ROUND": round_label,
                 "FP": round(fpts, 2),
                 "FP RK": "",
