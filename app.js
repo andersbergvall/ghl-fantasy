@@ -34,8 +34,11 @@ const trophyGrid = document.getElementById("trophyGrid");
 const leaderboard = document.getElementById("leaderboard");
 const tabMatchupBoard = document.getElementById("tabMatchupBoard");
 const tabSeasonLeaderboard = document.getElementById("tabSeasonLeaderboard");
+const tabDraftClass = document.getElementById("tabDraftClass");
 const matchupPane = document.getElementById("matchupPane");
 const leaderboardPane = document.getElementById("leaderboardPane");
+const draftClassPane = document.getElementById("draftClassPane");
+const draftClassTabSeason = document.getElementById("draftClassTabSeason");
 
 const groupLabels = {
   regseason: "Regular Season",
@@ -52,14 +55,21 @@ const sectionLabels = {
 
 const trophyDataUrl = window.__GHL_TROPHY_DATA_URL__ || "/trophy-data";
 const matchupDataUrl = window.__GHL_MATCHUP_DATA_URL__ || "/matchup-data";
+const draftClassDataUrl = window.__GHL_DRAFT_CLASS_DATA_URL__ || "/drafted-player-stats";
 
 let trackerData = {};
 let matchupData = {};
+let draftClassData = {};
 let activeTrophyCard = null;
 let activeLeaderboardRow = null;
 let activeMatchupIndex = -1;
 let matchupSortKey = "FP";
 let matchupSortDirection = "desc";
+let draftClassSortKey = "PICK";
+let draftClassSortDirection = "asc";
+let draftClassPageIndex = 0;
+let draftClassRoundFilters = new Set();
+let draftClassPositionFilters = new Set();
 let activeTopBoardTab = "leaderboard";
 let matchupTableScrollLeft = 0;
 let matchupScrollRestoreTimers = [];
@@ -84,20 +94,32 @@ function restoreMatchupTableScroll(tableWrap) {
 function setTopBoardTab(tabKey) {
   activeTopBoardTab = tabKey;
   const isMatchup = tabKey === "matchup";
+  const isLeaderboard = tabKey === "leaderboard";
+  const isDraftClass = tabKey === "draft-class";
 
   if (tabMatchupBoard) {
     tabMatchupBoard.classList.toggle("is-active", isMatchup);
     tabMatchupBoard.setAttribute("aria-selected", String(isMatchup));
   }
   if (tabSeasonLeaderboard) {
-    tabSeasonLeaderboard.classList.toggle("is-active", !isMatchup);
-    tabSeasonLeaderboard.setAttribute("aria-selected", String(!isMatchup));
+    tabSeasonLeaderboard.classList.toggle("is-active", isLeaderboard);
+    tabSeasonLeaderboard.setAttribute("aria-selected", String(isLeaderboard));
+  }
+  if (tabDraftClass) {
+    tabDraftClass.classList.toggle("is-active", isDraftClass);
+    tabDraftClass.setAttribute("aria-selected", String(isDraftClass));
   }
   if (matchupPane) {
     matchupPane.hidden = !isMatchup;
   }
   if (leaderboardPane) {
-    leaderboardPane.hidden = isMatchup;
+    leaderboardPane.hidden = !isLeaderboard;
+  }
+  if (draftClassPane) {
+    draftClassPane.hidden = !isDraftClass;
+    if (isDraftClass && !!seasonSelect?.value) {
+      renderDraftClassBoard(seasonSelect.value);
+    }
   }
 }
 
@@ -456,6 +478,293 @@ function sortMatchupRows(rows) {
   });
 }
 
+const draftClassColumns = [
+  { key: "PICK", label: "PICK", type: "number" },
+  { key: "ROUND", label: "ROUND", type: "string" },
+  { key: "PLAYER", label: "PLAYER", type: "string" },
+  { key: "POS", label: "POS", type: "string" },
+  { key: "FP", label: "FP", type: "number" },
+  { key: "FP RK", label: "FP RK", type: "string" },
+  { key: "FP/G", label: "FP/G", type: "number" },
+  { key: "FP/G RK", label: "FP/G RK", type: "string" },
+  { key: "ROS", label: "ROS", type: "number" },
+];
+
+function getDraftClassRows(seasonKey) {
+  const seasonNode = draftClassData.season?.[seasonKey] || {};
+  const rows = seasonNode.players || [];
+  return Array.isArray(rows) ? rows : [];
+}
+
+function getDraftClassCellValue(row, key) {
+  if (!row || typeof row !== "object") {
+    return undefined;
+  }
+
+  return row[key];
+}
+
+function formatDraftClassCell(column, value) {
+  if (column.key === "ROS") {
+    const numeric = Number(value ?? 0);
+    if (!Number.isFinite(numeric)) {
+      return "0%";
+    }
+    return `${Math.round(numeric)}%`;
+  }
+
+  if (column.type === "number") {
+    const numeric = Number(value ?? 0);
+    if (!Number.isFinite(numeric)) {
+      return column.key === "PICK" ? "" : "0.00";
+    }
+    if (column.key === "PICK") {
+      return String(Math.round(numeric));
+    }
+    return numeric.toFixed(2);
+  }
+
+  return value === undefined || value === null ? "" : String(value);
+}
+
+function getDraftClassPositionBucket(position) {
+  const normalized = String(position || "").trim().toUpperCase();
+  if (normalized === "D") {
+    return "D";
+  }
+  if (normalized === "G") {
+    return "G";
+  }
+  return "F";
+}
+
+function getDraftClassFilteredRows(seasonKey) {
+  const rows = getDraftClassRows(seasonKey);
+
+  return rows.filter((row) => {
+    const roundValue = String(row?.ROUND || row?.Round || "").trim();
+    const roundMatch =
+      !draftClassRoundFilters.size ||
+      draftClassRoundFilters.has(roundValue) ||
+      (draftClassRoundFilters.has("K") && roundValue === "K");
+
+    const positionValue = String(row?.POS || "").trim().toUpperCase();
+    const positionBucket = getDraftClassPositionBucket(positionValue);
+    const positionMatch = !draftClassPositionFilters.size || draftClassPositionFilters.has(positionBucket);
+
+    return roundMatch && positionMatch;
+  });
+}
+
+function getDraftClassSortNumber(value) {
+  if (value === null || value === undefined || value === "") {
+    return Number.NEGATIVE_INFINITY;
+  }
+
+  const text = String(value).trim();
+  if (text === "K") {
+    return Number.POSITIVE_INFINITY;
+  }
+
+  const numeric = Number(text);
+  return Number.isFinite(numeric) ? numeric : Number.NEGATIVE_INFINITY;
+}
+
+function sortDraftClassRows(rows) {
+  const column = draftClassColumns.find((entry) => entry.key === draftClassSortKey) || draftClassColumns[0];
+  const direction = draftClassSortDirection === "asc" ? 1 : -1;
+
+  return [...rows].sort((left, right) => {
+    const leftValue = getDraftClassCellValue(left, column.key);
+    const rightValue = getDraftClassCellValue(right, column.key);
+
+    if (column.key === "FP RK" || column.key === "FP/G RK") {
+      const leftNumber = getDraftClassSortNumber(leftValue);
+      const rightNumber = getDraftClassSortNumber(rightValue);
+      if (leftNumber !== rightNumber) {
+        return (leftNumber - rightNumber) * direction;
+      }
+      return String(left?.PLAYER || "").localeCompare(String(right?.PLAYER || ""));
+    }
+
+    if (column.type === "number") {
+      const leftNumber = Number(leftValue ?? 0);
+      const rightNumber = Number(rightValue ?? 0);
+      if (leftNumber !== rightNumber) {
+        return (leftNumber - rightNumber) * direction;
+      }
+      return String(left?.PLAYER || "").localeCompare(String(right?.PLAYER || ""));
+    }
+
+    const leftText = String(leftValue ?? "");
+    const rightText = String(rightValue ?? "");
+    if (leftText === rightText) {
+      return String(left?.PLAYER || "").localeCompare(String(right?.PLAYER || ""));
+    }
+
+    if (leftText === "K") {
+      return 1 * direction;
+    }
+    if (rightText === "K") {
+      return -1 * direction;
+    }
+
+    return leftText.localeCompare(rightText) * direction;
+  });
+}
+
+function renderDraftClassBoard(seasonKey) {
+  const draftRows = sortDraftClassRows(getDraftClassFilteredRows(seasonKey));
+  const pageSize = 48;
+  const totalPages = Math.max(1, Math.ceil(draftRows.length / pageSize));
+  if (draftClassPageIndex >= totalPages) {
+    draftClassPageIndex = totalPages - 1;
+  }
+  if (draftClassPageIndex < 0) {
+    draftClassPageIndex = 0;
+  }
+
+  const startIndex = draftClassPageIndex * pageSize;
+  const endIndex = Math.min(startIndex + pageSize, draftRows.length);
+  const pageRows = draftRows.slice(startIndex, endIndex);
+
+  const roundButtons = [
+    ...Array.from({ length: 21 }, (_, index) => `R${index + 1}`),
+    "K",
+  ]
+    .map((roundKey) => {
+      const isActive = draftClassRoundFilters.has(roundKey);
+      return `<button class="filter-chip ${isActive ? "is-active" : ""}" data-round="${roundKey}" type="button">${roundKey}</button>`;
+    })
+    .join("");
+
+  const positionButtons = ["D", "G", "F"]
+    .map((positionKey) => {
+      const isActive = draftClassPositionFilters.has(positionKey);
+      return `<button class="filter-chip ${isActive ? "is-active" : ""}" data-position="${positionKey}" type="button">${positionKey}</button>`;
+    })
+    .join("");
+
+  const headerCells = draftClassColumns
+    .map((column) => {
+      const isActive = draftClassSortKey === column.key;
+      const indicator = isActive ? (draftClassSortDirection === "asc" ? "↑" : "↓") : "↕";
+      return `<th><button class="matchup-sort${isActive ? " is-active" : ""}" data-draft-column="${column.key}" type="button"><span class="matchup-sort-label">${column.label}</span><span class="matchup-sort-indicator">${indicator}</span></button></th>`;
+    })
+    .join("");
+
+  const bodyRows = pageRows
+    .map((row) => {
+      const cells = draftClassColumns
+        .map((column) => `<td>${formatDraftClassCell(column, getDraftClassCellValue(row, column.key))}</td>`)
+        .join("");
+      return `<tr>${cells}</tr>`;
+    })
+    .join("");
+
+  if (!draftClassPane) {
+    return;
+  }
+
+  draftClassPane.innerHTML = `
+    <section class="draft-class-card">
+      <div class="draft-class-header">
+        <div class="draft-class-header-title">
+          <p class="eyebrow">Draft Class</p>
+          <div class="draft-class-meta">${draftRows.length} players</div>
+        </div>
+        <div class="draft-class-pagination">
+          <button class="matchup-nav-btn" data-draft-direction="prev" type="button" ${draftClassPageIndex === 0 ? "disabled" : ""}>◀</button>
+          <span class="draft-class-page-label">${draftRows.length ? `${startIndex + 1}–${endIndex}` : "0–0"}</span>
+          <button class="matchup-nav-btn" data-draft-direction="next" type="button" ${draftClassPageIndex >= totalPages - 1 ? "disabled" : ""}>▶</button>
+        </div>
+      </div>
+
+      <div class="draft-class-toolbar">
+        <div class="draft-class-filter-group">
+          <span class="filter-group-label">Round</span>
+          <div class="filter-chip-row">${roundButtons}</div>
+        </div>
+        <div class="draft-class-filter-group">
+          <span class="filter-group-label">Position</span>
+          <div class="filter-chip-row">${positionButtons}</div>
+        </div>
+      </div>
+
+      <div class="matchup-table-wrap draft-class-table-wrap">
+        <table class="matchup-table draft-class-table">
+          <thead><tr>${headerCells}</tr></thead>
+          <tbody>${bodyRows || '<tr><td colspan="9">No players match the current filters.</td></tr>'}</tbody>
+        </table>
+      </div>
+    </section>
+  `;
+
+  draftClassPane.querySelectorAll(".filter-chip[data-round]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const roundKey = button.getAttribute("data-round");
+      if (!roundKey) {
+        return;
+      }
+      if (draftClassRoundFilters.has(roundKey)) {
+        draftClassRoundFilters.delete(roundKey);
+      } else {
+        draftClassRoundFilters.add(roundKey);
+      }
+      draftClassPageIndex = 0;
+      renderDraftClassBoard(seasonKey);
+    });
+  });
+
+  draftClassPane.querySelectorAll(".filter-chip[data-position]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const positionKey = button.getAttribute("data-position");
+      if (!positionKey) {
+        return;
+      }
+      if (draftClassPositionFilters.has(positionKey)) {
+        draftClassPositionFilters.delete(positionKey);
+      } else {
+        draftClassPositionFilters.add(positionKey);
+      }
+      draftClassPageIndex = 0;
+      renderDraftClassBoard(seasonKey);
+    });
+  });
+
+  draftClassPane.querySelectorAll(".matchup-nav-btn[data-draft-direction]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const direction = button.getAttribute("data-draft-direction");
+      if (direction === "prev") {
+        draftClassPageIndex = Math.max(0, draftClassPageIndex - 1);
+      } else if (direction === "next") {
+        draftClassPageIndex = Math.min(totalPages - 1, draftClassPageIndex + 1);
+      }
+      renderDraftClassBoard(seasonKey);
+    });
+  });
+
+  draftClassPane.querySelectorAll(".matchup-sort[data-draft-column]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const key = button.getAttribute("data-draft-column") || "PICK";
+      if (draftClassSortKey === key) {
+        draftClassSortDirection = draftClassSortDirection === "asc" ? "desc" : "asc";
+      } else {
+        draftClassSortKey = key;
+        if (key === "PICK") {
+          draftClassSortDirection = "asc";
+        } else if (key === "FP") {
+          draftClassSortDirection = "desc";
+        } else {
+          draftClassSortDirection = "asc";
+        }
+      }
+      draftClassPageIndex = 0;
+      renderDraftClassBoard(seasonKey);
+    });
+  });
+}
+
 function renderMatchupBoard(seasonKey) {
   if (!matchupBoard) {
     return;
@@ -705,8 +1014,14 @@ function renderTrophies(seasonKey) {
 
   activeTrophyCard = null;
   trophyGrid.innerHTML = "";
+  if (draftClassTabSeason) {
+    draftClassTabSeason.textContent = "";
+  }
   renderMatchupBoard(seasonKey);
   renderLeaderboard(seasonKey);
+  if (draftClassPane) {
+    renderDraftClassBoard(seasonKey);
+  }
 
   const hasAnyContent = seasonGroups.some(({ key }) => {
     const bucket = seasonData[key];
@@ -760,9 +1075,10 @@ function renderTrophies(seasonKey) {
 }
 
 async function loadTrackerData() {
-  const [trophyResponse, matchupResponse] = await Promise.all([
+  const [trophyResponse, matchupResponse, draftClassResponse] = await Promise.all([
     fetch(trophyDataUrl, { cache: "no-store" }),
     fetch(matchupDataUrl, { cache: "no-store" }),
+    fetch(draftClassDataUrl, { cache: "no-store" }).catch(() => ({ ok: false, status: 0 })),
   ]);
 
   if (!trophyResponse.ok) {
@@ -774,10 +1090,12 @@ async function loadTrackerData() {
 
   trackerData = await trophyResponse.json();
   matchupData = await matchupResponse.json();
+  draftClassData = draftClassResponse.ok ? await draftClassResponse.json() : { season: {} };
 
   const seasonSet = new Set([
     ...Object.keys(trackerData.season || {}),
     ...Object.keys(matchupData.season || {}),
+    ...Object.keys(draftClassData.season || {}),
   ]);
   const seasons = [...seasonSet].sort((a, b) => b.localeCompare(a));
 
@@ -806,6 +1124,9 @@ if (tabMatchupBoard) {
 }
 if (tabSeasonLeaderboard) {
   tabSeasonLeaderboard.addEventListener("click", () => setTopBoardTab("leaderboard"));
+}
+if (tabDraftClass) {
+  tabDraftClass.addEventListener("click", () => setTopBoardTab("draft-class"));
 }
 
 (async () => {

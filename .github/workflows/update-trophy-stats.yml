@@ -31,8 +31,10 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_KV_NAMESPACE_ID_TROPHY_DATA: ${{ secrets.CLOUDFLARE_KV_NAMESPACE_ID_TROPHY_DATA }}
           CLOUDFLARE_KV_NAMESPACE_ID_MATCHUP_DATA: ${{ secrets.CLOUDFLARE_KV_NAMESPACE_ID_MATCHUP_DATA }}
+          CLOUDFLARE_KV_NAMESPACE_ID_DRAFTED_PLAYER_STATS: ${{ secrets.CLOUDFLARE_KV_NAMESPACE_ID_DRAFTED_PLAYER_STATS }}
           CLOUDFLARE_KV_KEY_TROPHY_DATA: "trophy-data"
           CLOUDFLARE_KV_KEY_MATCHUP_DATA: "matchup-data"
+          CLOUDFLARE_KV_KEY_DRAFTED_PLAYER_STATS: "drafted-player-stats"
           __cf_bm: ${{ secrets.CF_BM }}
           cf_clearance: ${{ secrets.CF_CLEARANCE }}
           FX_RM: ${{ secrets.FX_RM }}

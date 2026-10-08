@@ -326,9 +326,109 @@ select {
   gap: 14px;
 }
 
+.draft-class-card,
 .matchup-board {
   display: flex;
   flex-direction: column;
+}
+
+.draft-class-card {
+  border-radius: 12px;
+  background: rgba(148, 163, 184, 0.03);
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  padding: 10px;
+}
+
+.draft-class-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.draft-class-header-title {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.draft-class-meta {
+  color: var(--muted);
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.draft-class-pagination {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.draft-class-page-label {
+  min-width: 72px;
+  text-align: center;
+  color: var(--text);
+  font-weight: 700;
+  font-size: 0.8rem;
+}
+
+.draft-class-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.draft-class-filter-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.filter-group-label {
+  color: var(--muted);
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-weight: 700;
+}
+
+.filter-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.filter-chip {
+  appearance: none;
+  -webkit-appearance: none;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  background: rgba(148, 163, 184, 0.08);
+  color: var(--text);
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+
+.filter-chip.is-active {
+  color: var(--ice);
+  border-color: rgba(125, 182, 255, 0.42);
+  background: rgba(125, 182, 255, 0.16);
+  box-shadow: inset 0 0 0 1px rgba(125, 182, 255, 0.12);
+}
+
+.draft-class-table-wrap {
+  max-height: 560px;
+  overflow-y: auto;
+  position: relative;
 }
 
 .matchup-card {
@@ -375,6 +475,8 @@ select {
 
 .matchup-table-wrap {
   overflow-x: auto;
+  overflow-y: auto;
+  position: relative;
   padding-bottom: 4px;
   scrollbar-width: thin;
   scrollbar-color: rgba(125, 182, 255, 0.55) rgba(148, 163, 184, 0.12);
@@ -402,6 +504,15 @@ select {
   font-family: "Inter", sans-serif;
   font-variant-numeric: tabular-nums;
   font-feature-settings: "tnum" 1, "lnum" 1;
+}
+
+.matchup-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: rgba(9, 13, 21, 0.96);
+  backdrop-filter: blur(6px);
+  box-shadow: inset 0 -1px 0 rgba(148, 163, 184, 0.12);
 }
 
 .matchup-table th,

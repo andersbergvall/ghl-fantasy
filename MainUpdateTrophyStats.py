@@ -132,6 +132,19 @@ def _coerce_numeric(value: Any) -> float:
         return 0.0
 
 
+def _coerce_percent(value: Any) -> float:
+    """Read percentage strings like '54%' or '54.2%' as numeric percent values."""
+    if value is None or (isinstance(value, str) and not value.strip()):
+        return 0.0
+    cleaned = str(value).strip().replace("%", "").replace(",", "")
+    if cleaned in {"", "-", "--", "nan", "NaN"}:
+        return 0.0
+    try:
+        return float(cleaned)
+    except ValueError:
+        return 0.0
+
+
 def build_detailed_team_table(skater_df: pd.DataFrame, goalie_df: pd.DataFrame) -> pd.DataFrame:
     """Merge skater and goalie standings by team, summing overlapping numeric columns."""
     if skater_df.empty and goalie_df.empty:
@@ -847,7 +860,126 @@ def get_appended_draft_rows() -> List[Dict[str, Any]]:
     """Start from draft results and append Calder candidates before any trophy calculations."""
     draft_rows = load_csv_rows(DRAFT_RESULTS_CSV)
     calder_rows = load_csv_rows(CALDER_CANDIDATES_CSV)
-    return draft_rows + calder_rows
+    return [{**row, "_source": "draft"} for row in draft_rows] + [{**row, "_source": "calder"} for row in calder_rows]
+
+
+def normalize_round_value(value: Any) -> str:
+    """Normalize CSV round values to displayable labels like R1 or K."""
+    if value is None:
+        return ""
+
+    text = str(value).strip().upper()
+    if not text or text in {"N/A", "NA", "NONE"}:
+        return ""
+    if text in {"K", "KEEP", "KEPT", "KEEPER", "KEEPERS"}:
+        return "K"
+    if text in {"0", "0.0", "0.00"}:
+        return "K"
+
+    cleaned = text.replace("ROUND", "").replace("R", "", 1).strip()
+    try:
+        number = int(float(cleaned))
+    except (TypeError, ValueError):
+        return text
+    return f"R{number}"
+
+
+def build_drafted_player_stats_json(
+    season_key: str | None = None,
+    player_stats_by_id: Dict[str, Dict[str, Any]] | None = None,
+) -> Dict[str, Any]:
+    """Build a player-level draft-class dataset that includes all drafted and kept players."""
+    season_name = season_key or os.getenv("SEASON_KEY", "2026-2027").strip() or "2026-2027"
+    stats_by_id = player_stats_by_id or get_player_stats_by_id()
+
+    rows: List[Dict[str, Any]] = []
+    seen_player_ids: set[str] = set()
+
+    for draft_row in get_appended_draft_rows():
+        player_id = normalize_player_id(draft_row.get("Player ID"))
+        if not player_id or player_id in seen_player_ids:
+            continue
+        seen_player_ids.add(player_id)
+
+        source_type = str(draft_row.get("_source", "draft")).strip().lower()
+        player_name = normalize_fantrax_text(str(draft_row.get("Player", "")).strip())
+        raw_pos = str(draft_row.get("Pos", "")).strip().upper()
+        normalized_round = normalize_round_value(draft_row.get("Round"))
+        is_keeper = source_type == "calder" or normalized_round == "K"
+        round_label = "K" if is_keeper else normalized_round
+
+        stats = stats_by_id.get(player_id, {})
+        try:
+            fpts = float(stats.get("FPts", 0.0)) if stats else 0.0
+        except (TypeError, ValueError):
+            fpts = 0.0
+
+        try:
+            fp_per_game = float(stats.get("FP/G", 0.0)) if stats else 0.0
+        except (TypeError, ValueError):
+            fp_per_game = 0.0
+
+        try:
+            ros = _coerce_percent(stats.get("Ros", 0.0)) if stats else 0.0
+        except (TypeError, ValueError):
+            ros = 0.0
+
+        pick_value = draft_row.get("Ov Pick") or draft_row.get("Pick") or ""
+        normalized_pick = _coerce_numeric(pick_value)
+        if source_type == "calder":
+            pick_value_final = 999
+        elif str(pick_value).strip() not in {"", "-"} and normalized_pick > 0:
+            pick_value_final = int(normalized_pick)
+        else:
+            pick_value_final = ""
+
+        rows.append(
+            {
+                "PICK": pick_value_final,
+                "PLAYER": player_name,
+                "POS": raw_pos or get_position_bucket(draft_row.get("Pos")),
+                "ROUND": round_label,
+                "FP": round(fpts, 2),
+                "FP RK": "",
+                "FP/G": round(fp_per_game, 2),
+                "FP/G RK": "",
+                "ROS": round(ros, 2),
+                "_sort_fp": fpts,
+                "_sort_fp_per_game": fp_per_game,
+                "_sort_round": round_label,
+                "_player_id": player_id,
+            }
+        )
+
+    ordered_rows = sorted(rows, key=lambda item: float(item.get("_sort_fp", 0.0)), reverse=True)
+    ranked_rows: List[Dict[str, Any]] = []
+    for rank_number, row in enumerate(ordered_rows, start=1):
+        drafted_row = dict(row)
+        drafted_row["FP RK"] = rank_number
+        ranked_rows.append(drafted_row)
+
+    fp_per_game_ordered_rows = sorted(rows, key=lambda item: float(item.get("_sort_fp_per_game", 0.0)), reverse=True)
+    fp_per_game_rank_lookup: Dict[str, int] = {}
+    for rank_number, row in enumerate(fp_per_game_ordered_rows, start=1):
+        fp_per_game_rank_lookup[row["_player_id"]] = rank_number
+
+    for row in ranked_rows:
+        row["FP/G RK"] = fp_per_game_rank_lookup.get(row["_player_id"], "")
+
+    for row in ranked_rows:
+        row.pop("_sort_fp", None)
+        row.pop("_sort_fp_per_game", None)
+        row.pop("_sort_round", None)
+        row.pop("_player_id", None)
+
+    return {
+        "season": {
+            season_name: {
+                "lastupdated": __import__("datetime").datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC"),
+                "players": ranked_rows,
+            }
+        }
+    }
 
 
 def get_hart_leaderboard(player_stats_by_id: Dict[str, Dict[str, Any]] | None = None) -> List[Dict[str, Any]]:
@@ -1447,12 +1579,18 @@ def patch_cloudflare_kv_value(namespace_id: str, key: str, payload: Dict[str, An
     }
 
 
-def publish_cloudflare_kv_snapshots(trophy_payload: Dict[str, Any], matchup_payload: Dict[str, Any]) -> Dict[str, Any]:
-    """Publish both tracker snapshots to Cloudflare KV."""
+def publish_cloudflare_kv_snapshots(
+    trophy_payload: Dict[str, Any],
+    matchup_payload: Dict[str, Any],
+    draft_class_payload: Dict[str, Any] | None = None,
+) -> Dict[str, Any]:
+    """Publish tracker snapshots and the new draft-class stats to Cloudflare KV."""
     trophy_namespace_id = os.getenv("CLOUDFLARE_KV_NAMESPACE_ID_TROPHY_DATA", "").strip()
     matchup_namespace_id = os.getenv("CLOUDFLARE_KV_NAMESPACE_ID_MATCHUP_DATA", "").strip()
+    drafted_namespace_id = os.getenv("CLOUDFLARE_KV_NAMESPACE_ID_DRAFTED_PLAYER_STATS", "").strip()
     trophy_key = os.getenv("CLOUDFLARE_KV_KEY_TROPHY_DATA", "trophy-data").strip() or "trophy-data"
     matchup_key = os.getenv("CLOUDFLARE_KV_KEY_MATCHUP_DATA", "matchup-data").strip() or "matchup-data"
+    drafted_key = os.getenv("CLOUDFLARE_KV_KEY_DRAFTED_PLAYER_STATS", "drafted-player-stats").strip() or "drafted-player-stats"
 
     if not trophy_namespace_id:
         raise ValueError("Missing CLOUDFLARE_KV_NAMESPACE_ID_TROPHY_DATA in the environment.")
@@ -1462,10 +1600,17 @@ def publish_cloudflare_kv_snapshots(trophy_payload: Dict[str, Any], matchup_payl
     trophy_result = patch_cloudflare_kv_value(trophy_namespace_id, trophy_key, trophy_payload)
     matchup_result = patch_cloudflare_kv_value(matchup_namespace_id, matchup_key, matchup_payload)
 
-    return {
+    result: Dict[str, Any] = {
         "trophy-data": trophy_result,
         "matchup-data": matchup_result,
     }
+
+    if draft_class_payload is not None:
+        if not drafted_namespace_id:
+            raise ValueError("Missing CLOUDFLARE_KV_NAMESPACE_ID_DRAFTED_PLAYER_STATS in the environment.")
+        result["drafted-player-stats"] = patch_cloudflare_kv_value(drafted_namespace_id, drafted_key, draft_class_payload)
+
+    return result
 
 
 if __name__ == "__main__":
@@ -1482,15 +1627,19 @@ if __name__ == "__main__":
         standings_tables=standings_tables,
     )
     matchup_json = build_matchup_data_json(league_id=league_id, weeks_in_season=season_weeks, season_key="2026-2027")
-
+    draft_class_json = build_drafted_player_stats_json(
+        season_key="2026-2027",
+        player_stats_by_id=get_player_stats_by_id(league_id=league_id, transaction_period=season_weeks),
+    )
 
     should_publish_cloudflare_kv = os.getenv("PUBLISH_TO_CLOUDFLARE_KV", "0").strip().lower() in {"1", "true", "yes", "on"}
 
     # print(json.dumps(final_json, ensure_ascii=False, indent=2))
     # print(json.dumps(matchup_json, ensure_ascii=False, indent=2))
     # should_publish_cloudflare_kv = False
+    # should_publish_cloudflare_kv = True
 
     if should_publish_cloudflare_kv:
-        cloudflare_result = publish_cloudflare_kv_snapshots(final_json, matchup_json)
+        cloudflare_result = publish_cloudflare_kv_snapshots(final_json, matchup_json, draft_class_json)
         print(json.dumps({"cloudflare_kv": cloudflare_result}, ensure_ascii=False, indent=2))
 
