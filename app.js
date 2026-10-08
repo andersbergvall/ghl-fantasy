@@ -72,6 +72,7 @@ let draftClassRoundFilters = new Set();
 let draftClassPositionFilters = new Set();
 let activeTopBoardTab = "leaderboard";
 let matchupTableScrollLeft = 0;
+let draftClassTableScrollLeft = 0;
 let matchupScrollRestoreTimers = [];
 
 function clearMatchupScrollRestoreTimers() {
@@ -479,8 +480,8 @@ function sortMatchupRows(rows) {
 }
 
 const draftClassColumns = [
-  { key: "PICK", label: "PICK", type: "number" },
-  { key: "ROUND", label: "ROUND", type: "string" },
+  { key: "PICK", label: "PK", type: "number" },
+  { key: "ROUND", label: "RD", type: "string" },
   { key: "PLAYER", label: "PLAYER", type: "string" },
   { key: "POS", label: "POS", type: "string" },
   { key: "FP", label: "FP", type: "number" },
@@ -489,6 +490,18 @@ const draftClassColumns = [
   { key: "FP/G RK", label: "FP/G RK", type: "string" },
   { key: "ROS", label: "ROS", type: "number" },
 ];
+
+const draftClassColumnWidths = {
+  PICK: 58,
+  ROUND: 58,
+  PLAYER: 190,
+  POS: 54,
+  FP: 68,
+  "FP RK": 74,
+  "FP/G": 76,
+  "FP/G RK": 82,
+  ROS: 70,
+};
 
 function getDraftClassRows(seasonKey) {
   const seasonNode = draftClassData.season?.[seasonKey] || {};
@@ -614,6 +627,11 @@ function sortDraftClassRows(rows) {
 }
 
 function renderDraftClassBoard(seasonKey) {
+  const existingTableWrap = draftClassPane?.querySelector(".draft-class-table-wrap");
+  if (existingTableWrap) {
+    draftClassTableScrollLeft = existingTableWrap.scrollLeft;
+  }
+
   const draftRows = sortDraftClassRows(getDraftClassFilteredRows(seasonKey));
   const pageSize = 48;
   const totalPages = Math.max(1, Math.ceil(draftRows.length / pageSize));
@@ -649,7 +667,9 @@ function renderDraftClassBoard(seasonKey) {
     .map((column) => {
       const isActive = draftClassSortKey === column.key;
       const indicator = isActive ? (draftClassSortDirection === "asc" ? "↑" : "↓") : "↕";
-      return `<th><button class="matchup-sort${isActive ? " is-active" : ""}" data-draft-column="${column.key}" type="button"><span class="matchup-sort-label">${column.label}</span><span class="matchup-sort-indicator">${indicator}</span></button></th>`;
+      const columnWidth = draftClassColumnWidths[column.key];
+      const widthStyle = columnWidth ? `style="width:${columnWidth}px; min-width:${columnWidth}px;"` : "";
+      return `<th ${widthStyle}><button class="matchup-sort${isActive ? " is-active" : ""}" data-draft-column="${column.key}" type="button"><span class="matchup-sort-label">${column.label}</span><span class="matchup-sort-indicator">${indicator}</span></button></th>`;
     })
     .join("");
 
@@ -682,7 +702,7 @@ function renderDraftClassBoard(seasonKey) {
 
       <div class="draft-class-toolbar">
         <div class="draft-class-filter-group">
-          <span class="filter-group-label">Round</span>
+          <span class="filter-group-label">RD</span>
           <div class="filter-chip-row">${roundButtons}</div>
         </div>
         <div class="draft-class-filter-group">
@@ -699,6 +719,14 @@ function renderDraftClassBoard(seasonKey) {
       </div>
     </section>
   `;
+
+  const draftClassTableWrap = draftClassPane.querySelector(".draft-class-table-wrap");
+  if (draftClassTableWrap) {
+    draftClassTableWrap.scrollLeft = draftClassTableScrollLeft;
+    draftClassTableWrap.addEventListener("scroll", () => {
+      draftClassTableScrollLeft = draftClassTableWrap.scrollLeft;
+    });
+  }
 
   draftClassPane.querySelectorAll(".filter-chip[data-round]").forEach((button) => {
     button.addEventListener("click", () => {
