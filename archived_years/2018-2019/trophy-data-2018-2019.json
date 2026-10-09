@@ -1,0 +1,152 @@
+{
+  "season": {
+    "2018-2019": {
+      "lastupdated": "October 9th 2026, 22:12",
+      "regseason": {
+        "trophies": {
+          "Hart": [
+            {
+              "Team": "Withheld",
+              "Player": ""
+            }
+          ],
+          "Art Ross": [
+            {
+              "Team": "Valhalla Valkyries",
+              "Player": ""
+            }
+          ],
+          "Rocket Richard": [
+            {
+              "Team": "Wan Chai Oysters",
+              "Player": ""
+            }
+          ],
+          "Norris": [
+            {
+              "Team": "Taipei 101s",
+              "Player": ""
+            }
+          ],
+          "Vezina": [
+            {
+              "Team": "Bangkok Ladyboys",
+              "Player": ""
+            }
+          ],
+          "Calder": [
+            {
+              "Team": "Wan Chai Oysters",
+              "Player": "Leon Draisaitl"
+            }
+          ],
+          "Lady Byng": [
+            {
+              "Team": "Gävle Raiders",
+              "Player": ""
+            }
+          ],
+          "Selke": [
+            {
+              "Team": "Frescati Frogs",
+              "Player": ""
+            }
+          ],
+          "Jack Adams": [
+            {
+              "Team": "Tellus Tacos",
+              "Player": ""
+            }
+          ]
+        },
+        "awards": {},
+        "bounties": {
+          "It's Vegas Baby!": [
+            {
+              "Team": "Bangkok Ladyboys",
+              "Player": ""
+            }
+          ]
+        }
+      },
+      "postseason": {
+        "winners": {
+          "Stanley Cup": [
+            {
+              "Team": "Bangkok Ladyboys",
+              "Player": ""
+            }
+          ],
+          "President's Trophy": [
+            {
+              "Team": "Södermalm Hipsters",
+              "Player": ""
+            }
+          ]
+        },
+        "awards": {
+          "Conn Smythe": [
+            {
+              "Team": "Withheld",
+              "Player": ""
+            }
+          ]
+        },
+        "bounties": {
+          "The King is Dead!": [
+            {
+              "Team": "Wan Chai Oysters",
+              "Player": ""
+            }
+          ],
+          "Chasing the Cup!": [
+            {
+              "Team": "Bangkok Ladyboys",
+              "Player": ""
+            }
+          ],
+          "Bitter Looser or Righteous Winner!": [
+            {
+              "Team": "Warszawa White Russians",
+              "Player": ""
+            }
+          ]
+        },
+        "achievements": {
+          "Clarence S. Campbell": [
+            {
+              "Team": "Bangkok Ladyboys",
+              "Player": ""
+            }
+          ],
+          "Prince of Wales": [
+            {
+              "Team": "Tellus Tacos",
+              "Player": ""
+            }
+          ],
+          "Orange Lantern": [
+            {
+              "Team": "Birkastan Babysitters",
+              "Player": ""
+            }
+          ]
+        }
+      },
+      "shadowtrackers": {
+        "Runner Up": [
+          {
+            "Team": "Tellus Tacos",
+            "Player": ""
+          }
+        ],
+        "True President's Trophy": [
+          {
+            "Team": "Södermalm Hipsters",
+            "Player": ""
+          }
+        ]
+      }
+    }
+  }
+}

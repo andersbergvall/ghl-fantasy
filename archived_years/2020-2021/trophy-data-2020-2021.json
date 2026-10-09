@@ -1,0 +1,152 @@
+{
+  "season": {
+    "2020-2021": {
+      "lastupdated": "October 9th 2026, 22:12",
+      "regseason": {
+        "trophies": {
+          "Calder": [
+            {
+              "Team": "Wan Chai Oysters",
+              "Player": "Leon Draisaitl"
+            }
+          ],
+          "Hart": [
+            {
+              "Team": "Bangkok Ladyboys",
+              "Player": "Connor McDavid"
+            }
+          ],
+          "Art Ross": [
+            {
+              "Team": "Tuna Tacos",
+              "Player": ""
+            }
+          ],
+          "Rocket Richard": [
+            {
+              "Team": "Bönan Bonebreakers",
+              "Player": ""
+            }
+          ],
+          "Norris": [
+            {
+              "Team": "031 Nörrebro",
+              "Player": ""
+            }
+          ],
+          "Vezina": [
+            {
+              "Team": "Södermalm Hipsters",
+              "Player": ""
+            }
+          ],
+          "Lady Byng": [
+            {
+              "Team": "Södermalm Hipsters",
+              "Player": ""
+            }
+          ],
+          "Selke": [
+            {
+              "Team": "Valhalla Valkyries",
+              "Player": ""
+            }
+          ],
+          "Jack Adams": [
+            {
+              "Team": "Tuna Tacos",
+              "Player": ""
+            }
+          ]
+        },
+        "awards": {},
+        "bounties": {
+          "It's Vegas Baby!": [
+            {
+              "Team": "Tuna Tacos",
+              "Player": ""
+            }
+          ]
+        }
+      },
+      "postseason": {
+        "winners": {
+          "Stanley Cup": [
+            {
+              "Team": "Tuna Tacos",
+              "Player": ""
+            }
+          ],
+          "President's Trophy": [
+            {
+              "Team": "Tuna Tacos",
+              "Player": ""
+            }
+          ]
+        },
+        "awards": {
+          "Conn Smythe": [
+            {
+              "Team": "Bangkok Ladyboys",
+              "Player": "Brad Marchand"
+            }
+          ]
+        },
+        "bounties": {
+          "The King is Dead!": [
+            {
+              "Team": "Carry Over",
+              "Player": ""
+            }
+          ],
+          "Chasing the Cup!": [
+            {
+              "Team": "Carry Over",
+              "Player": ""
+            }
+          ],
+          "Bitter Looser or Righteous Winner!": [
+            {
+              "Team": "Södermalm Hipsters",
+              "Player": ""
+            }
+          ]
+        },
+        "achievements": {
+          "Clarence S. Campbell": [
+            {
+              "Team": "Tuna Tacos",
+              "Player": ""
+            }
+          ],
+          "Prince of Wales": [
+            {
+              "Team": "Warszawa White Russians",
+              "Player": ""
+            }
+          ],
+          "Orange Lantern": [
+            {
+              "Team": "Bangkok Ladyboys",
+              "Player": ""
+            }
+          ]
+        }
+      },
+      "shadowtrackers": {
+        "Runner Up": [
+          {
+            "Team": "Warszawa White Russians",
+            "Player": ""
+          }
+        ],
+        "True President's Trophy": [
+          {
+            "Team": "Tuna Tacos",
+            "Player": ""
+          }
+        ]
+      }
+    }
+  }
+}

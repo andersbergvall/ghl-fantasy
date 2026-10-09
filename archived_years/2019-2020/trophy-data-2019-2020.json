@@ -1,0 +1,152 @@
+{
+  "season": {
+    "2019-2020": {
+      "lastupdated": "October 9th 2026, 22:12",
+      "regseason": {
+        "trophies": {
+          "Hart": [
+            {
+              "Team": "Withheld",
+              "Player": ""
+            }
+          ],
+          "Art Ross": [
+            {
+              "Team": "Bönan Bonebreakers",
+              "Player": ""
+            }
+          ],
+          "Rocket Richard": [
+            {
+              "Team": "Warszawa White Russians",
+              "Player": ""
+            }
+          ],
+          "Norris": [
+            {
+              "Team": "Södermalm Hipsters",
+              "Player": ""
+            }
+          ],
+          "Vezina": [
+            {
+              "Team": "Södermalm Hipsters",
+              "Player": ""
+            }
+          ],
+          "Lady Byng": [
+            {
+              "Team": "Södermalm Hipsters",
+              "Player": ""
+            }
+          ],
+          "Selke": [
+            {
+              "Team": "Bönan Bonebreakers",
+              "Player": ""
+            }
+          ],
+          "Jack Adams": [
+            {
+              "Team": "Tuna Tacos",
+              "Player": ""
+            }
+          ],
+          "Calder": [
+            {
+              "Team": "Gävle Raiders",
+              "Player": "David Pastrnak"
+            }
+          ]
+        },
+        "awards": {},
+        "bounties": {
+          "It's Vegas Baby!": [
+            {
+              "Team": "Taipei 101s",
+              "Player": ""
+            }
+          ]
+        }
+      },
+      "postseason": {
+        "winners": {
+          "Stanley Cup": [
+            {
+              "Team": "Withheld",
+              "Player": ""
+            }
+          ],
+          "President's Trophy": [
+            {
+              "Team": "Bönan Bonebreakers",
+              "Player": ""
+            }
+          ]
+        },
+        "awards": {
+          "Conn Smythe": [
+            {
+              "Team": "Withheld",
+              "Player": ""
+            }
+          ]
+        },
+        "bounties": {
+          "The King is Dead!": [
+            {
+              "Team": "Withheld",
+              "Player": ""
+            }
+          ],
+          "Chasing the Cup!": [
+            {
+              "Team": "Withheld",
+              "Player": ""
+            }
+          ],
+          "Bitter Looser or Righteous Winner!": [
+            {
+              "Team": "Withheld",
+              "Player": ""
+            }
+          ]
+        },
+        "achievements": {
+          "Clarence S. Campbell": [
+            {
+              "Team": "Withheld",
+              "Player": ""
+            }
+          ],
+          "Prince of Wales": [
+            {
+              "Team": "Withheld",
+              "Player": ""
+            }
+          ],
+          "Orange Lantern": [
+            {
+              "Team": "Bangkok Ladyboys",
+              "Player": ""
+            }
+          ]
+        }
+      },
+      "shadowtrackers": {
+        "Runner Up": [
+          {
+            "Team": "Withheld",
+            "Player": ""
+          }
+        ],
+        "True President's Trophy": [
+          {
+            "Team": "Bönan Bonebreakers",
+            "Player": ""
+          }
+        ]
+      }
+    }
+  }
+}

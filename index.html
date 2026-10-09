@@ -5,9 +5,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>GHL Trophy Tracker</title>
     <script>
-      window.__GHL_TROPHY_DATA_URL__ = "https://purple-meadow-3929.anders-bergvall-bd5.workers.dev/trophy-data?v=20261007";
-      window.__GHL_MATCHUP_DATA_URL__ = "https://purple-meadow-3929.anders-bergvall-bd5.workers.dev/matchup-data?v=20261007";
-      window.__GHL_DRAFT_CLASS_DATA_URL__ = "https://purple-meadow-3929.anders-bergvall-bd5.workers.dev/drafted-player-stats?v=20261008";
+      const workerBase = "https://purple-meadow-3929.anders-bergvall-bd5.workers.dev";
+      window.__GHL_TROPHY_DATA_URL__ = `${workerBase}/trophy-data?v=20261007`;
+      window.__GHL_MATCHUP_DATA_URL__ = `${workerBase}/matchup-data?v=20261007`;
+      window.__GHL_DRAFT_CLASS_DATA_URL__ = `${workerBase}/drafted-player-stats?v=20261008`;
+      window.__GHL_TROPHY_DATA_HISTORY_URL__ = `${workerBase}/trophy-data-history?v=20261007`;
+      window.__GHL_MATCHUP_DATA_HISTORY_URL__ = `${workerBase}/matchup-data-history?v=20261007`;
+      window.__GHL_DRAFT_CLASS_HISTORY_DATA_URL__ = `${workerBase}/drafted-player-stats-history?v=20261008`;
+      window.__GHL_OWNER_CONFIG_URL__ = `archived_years/owner_config.csv?v=20261010`;
     </script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -23,10 +28,8 @@
             <div class="topbar-copy">
               <h2 class="topbar-title">GHL Trophy Tracker</h2>
               <div class="topbar-subtitle-row">
-                <p class="topbar-subtitle">LEAGUE HONORS</p>
-                <label class="season-picker" for="seasonSelect">
-                  <select id="seasonSelect"></select>
-                </label>
+                <p class="topbar-subtitle">League Honors</p>
+                <span id="seasonTitle" class="topbar-season">--</span>
               </div>
               <div class="topbar-updated">
                 <span class="stat-label">Updated</span>
@@ -37,14 +40,22 @@
         </div>
       </header>
 
+      <div class="season-filter-bar">
+        <label class="season-filter" for="seasonSelect">
+          <span class="filter-group-label">Season</span>
+          <select id="seasonSelect" class="draft-class-select season-select"></select>
+        </label>
+      </div>
+
       <main class="dashboard">
         <div class="dashboard-layout">
           <div class="dashboard-main">
             <section class="top-board-card" aria-live="polite">
               <div class="top-board-tabs" role="tablist" aria-label="Top board views">
                 <button id="tabSeasonLeaderboard" class="top-board-tab is-active" type="button" role="tab" aria-selected="true" aria-controls="leaderboardPane">Season Leaderboard</button>
-                <button id="tabMatchupBoard" class="top-board-tab" type="button" role="tab" aria-selected="false" aria-controls="matchupPane">Matchup Board</button>
+                <button id="tabMatchupBoard" class="top-board-tab" type="button" role="tab" aria-selected="false" aria-controls="matchupPane">Matchups</button>
                 <button id="tabDraftClass" class="top-board-tab" type="button" role="tab" aria-selected="false" aria-controls="draftClassPane">Draft Class</button>
+                <button id="tabBingoBoard" class="top-board-tab" type="button" role="tab" aria-selected="false" aria-controls="bingoBoardPane">Bingo!</button>
               </div>
 
               <div id="matchupPane" class="top-board-pane" role="tabpanel" aria-labelledby="tabMatchupBoard" hidden>
@@ -62,6 +73,8 @@
               </div>
 
               <div id="draftClassPane" class="top-board-pane" role="tabpanel" aria-labelledby="tabDraftClass" hidden></div>
+
+              <div id="bingoBoardPane" class="top-board-pane" role="tabpanel" aria-labelledby="tabBingoBoard" hidden></div>
             </section>
 
             <section id="trophyGrid" class="trophy-grid" aria-live="polite"></section>

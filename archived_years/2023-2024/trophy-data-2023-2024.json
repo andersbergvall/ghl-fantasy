@@ -1,0 +1,411 @@
+{
+  "season": {
+    "2023-2024": {
+      "lastupdated": "October 9th 2026, 22:13",
+      "regseason": {
+        "trophies": {
+          "Norris": [
+            {
+              "Team": "Ömalm Golden Bananas",
+              "Player": ""
+            }
+          ],
+          "Hart": [
+            {
+              "Team": "Bangkok Ladyboys",
+              "Player": "Nathan MacKinnon",
+              "Fpts": 408.7
+            },
+            {
+              "Team": "Valhalla Valkyries",
+              "Player": "J.T. Miller",
+              "Fpts": 375.8
+            },
+            {
+              "Team": "Ömalm Golden Bananas",
+              "Player": "Nikita Kucherov",
+              "Fpts": 374.65
+            },
+            {
+              "Team": "Taipei 101's",
+              "Player": "David Pastrnak",
+              "Fpts": 364.4
+            },
+            {
+              "Team": "Rinkeby Runners",
+              "Player": "Auston Matthews",
+              "Fpts": 360.7
+            },
+            {
+              "Team": "Hagaström Hellraisers",
+              "Player": "Connor McDavid",
+              "Fpts": 359.6
+            },
+            {
+              "Team": "Valhalla Valkyries",
+              "Player": "Sam Reinhart",
+              "Fpts": 344.75
+            },
+            {
+              "Team": "Warszawa White Russians",
+              "Player": "Leon Draisaitl",
+              "Fpts": 337.35
+            },
+            {
+              "Team": "Gävle Raiders",
+              "Player": "Mikko Rantanen",
+              "Fpts": 328.4
+            },
+            {
+              "Team": "Taipei 101's",
+              "Player": "William Nylander",
+              "Fpts": 318.25
+            },
+            {
+              "Team": "Västermalm Frogs",
+              "Player": "Elias Pettersson",
+              "Fpts": 317.6
+            },
+            {
+              "Team": "Västermalm Frogs",
+              "Player": "Artemi Panarin",
+              "Fpts": 310.45
+            }
+          ],
+          "Art Ross": {
+            "Ömalm Golden Bananas": 3862.92,
+            "Bangkok Ladyboys": 3702.03,
+            "Bönan Bonebreakers": 3540.1,
+            "Taipei 101's": 3522.75,
+            "Västermalm Frogs": 3438.18,
+            "Rinkeby Runners": 3407.79,
+            "Gävle Raiders": 3402.5,
+            "Wan Chai Oysters": 3341.67,
+            "Hagaström Hellraisers": 3340.98,
+            "Valhalla Valkyries": 3301.02,
+            "Tuna Tacos": 3297.02,
+            "Warszawa White Russians": 2985.64
+          },
+          "Rocket Richard": {
+            "Rinkeby Runners": 318.0,
+            "Bangkok Ladyboys": 313.0,
+            "Taipei 101's": 311.0,
+            "Ömalm Golden Bananas": 307.0,
+            "Västermalm Frogs": 292.0,
+            "Valhalla Valkyries": 290.0,
+            "Wan Chai Oysters": 290.0,
+            "Gävle Raiders": 287.0,
+            "Bönan Bonebreakers": 281.0,
+            "Hagaström Hellraisers": 275.0,
+            "Tuna Tacos": 253.0,
+            "Warszawa White Russians": 233.0
+          },
+          "Selke": {
+            "Valhalla Valkyries": 68.0,
+            "Bangkok Ladyboys": 63.0,
+            "Hagaström Hellraisers": 63.0,
+            "Gävle Raiders": 49.0,
+            "Tuna Tacos": 36.0,
+            "Ömalm Golden Bananas": 25.0,
+            "Rinkeby Runners": 20.0,
+            "Taipei 101's": 7.0,
+            "Wan Chai Oysters": 1.0,
+            "Västermalm Frogs": -21.0,
+            "Bönan Bonebreakers": -41.0,
+            "Warszawa White Russians": -76.0
+          },
+          "Lady Byng": {
+            "Warszawa White Russians": 409.0,
+            "Tuna Tacos": 463.0,
+            "Gävle Raiders": 484.0,
+            "Wan Chai Oysters": 502.0,
+            "Taipei 101's": 509.0,
+            "Valhalla Valkyries": 512.0,
+            "Rinkeby Runners": 514.0,
+            "Bangkok Ladyboys": 516.0,
+            "Ömalm Golden Bananas": 531.0,
+            "Hagaström Hellraisers": 558.0,
+            "Västermalm Frogs": 568.0,
+            "Bönan Bonebreakers": 581.0
+          },
+          "Vezina": {
+            "Ömalm Golden Bananas": 356.85,
+            "Hagaström Hellraisers": 346.25,
+            "Bönan Bonebreakers": 340.35,
+            "Warszawa White Russians": 317.1,
+            "Taipei 101's": 284.4,
+            "Gävle Raiders": 282.4,
+            "Västermalm Frogs": 270.65,
+            "Wan Chai Oysters": 258.45,
+            "Tuna Tacos": 246.75,
+            "Bangkok Ladyboys": 218.25,
+            "Valhalla Valkyries": 165.8,
+            "Rinkeby Runners": 139.1
+          },
+          "Calder": [
+            {
+              "Team": "Bangkok Ladyboys",
+              "Player Name": "Jason Robertson",
+              "Fpts": 243.65
+            },
+            {
+              "Team": "Östermalm Golden Bananas",
+              "Player Name": "Thatcher Demko",
+              "Fpts": 209.05
+            },
+            {
+              "Team": "Wan Chai Oysters",
+              "Player Name": "Drake Batherson",
+              "Fpts": 188.2
+            },
+            {
+              "Team": "Bönan Bonebreakers",
+              "Player Name": "Moritz Seider",
+              "Fpts": 182.14
+            },
+            {
+              "Team": "Västermalm Frogs",
+              "Player Name": "Mason McTavish",
+              "Fpts": 168.75
+            },
+            {
+              "Team": "Hagaström Hellraisers",
+              "Player Name": "Jeremy Swayman",
+              "Fpts": 155.0
+            },
+            {
+              "Team": "Tuna Tacos",
+              "Player Name": "Josh Norris",
+              "Fpts": 148.2
+            },
+            {
+              "Team": "Taipei 101s",
+              "Player Name": "Bowen Byram",
+              "Fpts": 104.42
+            },
+            {
+              "Team": "Warszawa White Russians",
+              "Player Name": "Matty Beniers",
+              "Fpts": 94.9
+            },
+            {
+              "Team": "Valhalla Valkyries",
+              "Player Name": "Ilya Samsonov",
+              "Fpts": 85.8
+            },
+            {
+              "Team": "Gävle Raiders",
+              "Player Name": "Arthur Kaliyev",
+              "Fpts": 66.05
+            },
+            {
+              "Team": "Rinkeby Runners",
+              "Player Name": "Karel Vejmelka",
+              "Fpts": 56.9
+            }
+          ],
+          "Jack Adams": {
+            "Ömalm Golden Bananas": 475.47,
+            "Tuna Tacos": 367.8,
+            "Taipei 101's": 358.04,
+            "Warszawa White Russians": 311.45,
+            "Bönan Bonebreakers": 266.38,
+            "Wan Chai Oysters": 188.36,
+            "Bangkok Ladyboys": 132.31,
+            "Gävle Raiders": 126.46,
+            "Valhalla Valkyries": 103.44,
+            "Västermalm Frogs": -9.95,
+            "Hagaström Hellraisers": -15.78,
+            "Rinkeby Runners": -40.09
+          }
+        },
+        "awards": {
+          "Fantalytic's Frenzy": [
+            {
+              "Team": "Hagaström Hellraisers",
+              "Player": ""
+            }
+          ],
+          "Scout's honor": {
+            "Bangkok Ladyboys": 3569.72,
+            "Västermalm Frogs": 3448.13,
+            "Rinkeby Runners": 3447.88,
+            "Ömalm Golden Bananas": 3387.45,
+            "Hagaström Hellraisers": 3356.76,
+            "Gävle Raiders": 3276.04,
+            "Bönan Bonebreakers": 3273.72,
+            "Valhalla Valkyries": 3197.58,
+            "Taipei 101's": 3164.71,
+            "Wan Chai Oysters": 3153.31,
+            "Tuna Tacos": 2929.22,
+            "Warszawa White Russians": 2674.19,
+            "Östermalm Golden Bananas": 209.05,
+            "Taipei 101s": 104.42
+          }
+        },
+        "bounties": {
+          "It's Vegas Baby!": [
+            {
+              "Team": "Bönan Bonebreakers",
+              "Week": "Week 18",
+              "Fpts": 246.5
+            },
+            {
+              "Team": "Ömalm Golden Bananas",
+              "Week": "Week 12",
+              "Fpts": 238.42
+            },
+            {
+              "Team": "Taipei 101's",
+              "Week": "Week 18",
+              "Fpts": 237.96
+            },
+            {
+              "Team": "Bangkok Ladyboys",
+              "Week": "Week 15",
+              "Fpts": 230.94
+            },
+            {
+              "Team": "Wan Chai Oysters",
+              "Week": "Week 9",
+              "Fpts": 227.16
+            },
+            {
+              "Team": "Västermalm Frogs",
+              "Week": "Week 18",
+              "Fpts": 226.6
+            },
+            {
+              "Team": "Bönan Bonebreakers",
+              "Week": "Week 17",
+              "Fpts": 224.92
+            },
+            {
+              "Team": "Gävle Raiders",
+              "Week": "Week 14",
+              "Fpts": 223.17
+            },
+            {
+              "Team": "Ömalm Golden Bananas",
+              "Week": "Week 13",
+              "Fpts": 222.0
+            },
+            {
+              "Team": "Ömalm Golden Bananas",
+              "Week": "Week 8",
+              "Fpts": 217.55
+            },
+            {
+              "Team": "Bangkok Ladyboys",
+              "Week": "Week 6",
+              "Fpts": 217.51
+            },
+            {
+              "Team": "Bangkok Ladyboys",
+              "Week": "Week 13",
+              "Fpts": 216.22
+            }
+          ],
+          "Back's Backe Back-2-Back": {
+            "Ömalm Golden Bananas": "7-3-0",
+            "Västermalm Frogs": "7-3-0",
+            "Bangkok Ladyboys": "6-4-0",
+            "Taipei 101's": "6-4-0",
+            "Wan Chai Oysters": "6-4-0",
+            "Tuna Tacos": "6-4-0",
+            "Bönan Bonebreakers": "5-5-0",
+            "Valhalla Valkyries": "5-5-0",
+            "Gävle Raiders": "4-6-0",
+            "Hagaström Hellraisers": "4-6-0",
+            "Rinkeby Runners": "3-7-0",
+            "Warszawa White Russians": "1-9-0"
+          }
+        }
+      },
+      "postseason": {
+        "winners": {
+          "Stanley Cup": [
+            {
+              "Team": "Rinkeby Runners",
+              "Player": ""
+            }
+          ],
+          "President's Trophy": [
+            {
+              "Team": "Rinkeby Runners",
+              "Player": ""
+            }
+          ]
+        },
+        "awards": {
+          "Conn Smythe": [
+            {
+              "Team": "Hagaström Hellraisers",
+              "Player": "Connor McDavid"
+            }
+          ]
+        },
+        "bounties": {
+          "The King is Dead!": [
+            {
+              "Team": "Carry Over",
+              "Player": ""
+            }
+          ],
+          "Chasing the Cup!": [
+            {
+              "Team": "Bangkok Ladyboys",
+              "Player": ""
+            }
+          ],
+          "Bitter Looser or Righteous Winner!": [
+            {
+              "Team": "Rinkeby Runners",
+              "Player": ""
+            }
+          ]
+        },
+        "achievements": {
+          "Clarence S. Campbell": [
+            {
+              "Team": "Rinkeby Runners",
+              "Player": ""
+            }
+          ],
+          "Prince of Wales": [
+            {
+              "Team": "Bangkok Ladyboys",
+              "Player": ""
+            }
+          ],
+          "Orange Lantern": [
+            {
+              "Team": "Warszawa White Russians",
+              "Player": ""
+            }
+          ]
+        }
+      },
+      "shadowtrackers": {
+        "Runner Up": [
+          {
+            "Team": "Bangkok Ladyboys",
+            "Player": ""
+          }
+        ],
+        "True President's Trophy": [
+          {
+            "Team": "Ömalm Golden Bananas",
+            "Player": ""
+          }
+        ],
+        "Fake President's Trophy": [
+          {
+            "Team": "Rinkeby Runners",
+            "Player": ""
+          }
+        ]
+      }
+    }
+  }
+}

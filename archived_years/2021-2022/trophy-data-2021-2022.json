@@ -1,0 +1,164 @@
+{
+  "season": {
+    "2021-2022": {
+      "lastupdated": "October 9th 2026, 22:12",
+      "regseason": {
+        "trophies": {
+          "Calder": [
+            {
+              "Team": "Warszawa White Russians",
+              "Player": "Kirill Kaprizov"
+            }
+          ],
+          "Hart": [
+            {
+              "Team": "Bangkok Ladyboys",
+              "Player": "Leon Draisaitl"
+            }
+          ],
+          "Art Ross": [
+            {
+              "Team": "Tuna Tacos",
+              "Player": ""
+            }
+          ],
+          "Rocket Richard": [
+            {
+              "Team": "Tuna Tacos",
+              "Player": ""
+            }
+          ],
+          "Norris": [
+            {
+              "Team": "Warszawa White Russians",
+              "Player": ""
+            }
+          ],
+          "Vezina": [
+            {
+              "Team": "Rinkeby Runners",
+              "Player": ""
+            }
+          ],
+          "Lady Byng": [
+            {
+              "Team": "Essingen Frogs",
+              "Player": ""
+            }
+          ],
+          "Selke": [
+            {
+              "Team": "Essingen Frogs",
+              "Player": ""
+            }
+          ],
+          "Jack Adams": [
+            {
+              "Team": "Tuna Tacos",
+              "Player": ""
+            }
+          ]
+        },
+        "awards": {},
+        "bounties": {
+          "It's Vegas Baby!": [
+            {
+              "Team": "Tuna Tacos",
+              "Player": ""
+            }
+          ],
+          "Back's Backe Back-2-Back": [
+            {
+              "Team": "Tuna Tacos",
+              "Player": ""
+            }
+          ]
+        }
+      },
+      "postseason": {
+        "winners": {
+          "Stanley Cup": [
+            {
+              "Team": "Taipei 101s",
+              "Player": ""
+            }
+          ],
+          "President's Trophy": [
+            {
+              "Team": "Bönan Bonebreakers",
+              "Player": ""
+            }
+          ]
+        },
+        "awards": {
+          "Conn Smythe": [
+            {
+              "Team": "Gävle Raiders",
+              "Player": "Vladimir Tarasenko"
+            }
+          ]
+        },
+        "bounties": {
+          "The King is Dead!": [
+            {
+              "Team": "Södermalm Hipsters",
+              "Player": ""
+            }
+          ],
+          "Chasing the Cup!": [
+            {
+              "Team": "Taipei 101s",
+              "Player": ""
+            }
+          ],
+          "Bitter Looser or Righteous Winner!": [
+            {
+              "Team": "Bönan Bonebreakers",
+              "Player": ""
+            }
+          ]
+        },
+        "achievements": {
+          "Clarence S. Campbell": [
+            {
+              "Team": "Taipei 101s",
+              "Player": ""
+            }
+          ],
+          "Prince of Wales": [
+            {
+              "Team": "Södermalm Hipsters",
+              "Player": ""
+            }
+          ],
+          "Orange Lantern": [
+            {
+              "Team": "Valhalla Valkyries",
+              "Player": ""
+            }
+          ]
+        }
+      },
+      "shadowtrackers": {
+        "Runner Up": [
+          {
+            "Team": "Södermalm Hipsters",
+            "Player": ""
+          }
+        ],
+        "True President's Trophy": [
+          {
+            "Team": "Tuna Tacos",
+            "Player": ""
+          }
+        ],
+        "Fake President's Trophy": [
+          {
+            "Team": "Bönan Bonebreakers",
+            "Player": ""
+          }
+        ]
+      }
+    }
+  }
+}

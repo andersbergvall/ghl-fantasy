@@ -1,0 +1,120 @@
+{
+  "season": {
+    "2017-2018": {
+      "lastupdated": "October 9th 2026, 22:12",
+      "regseason": {
+        "trophies": {
+          "Hart": [
+            {
+              "Team": "Frescati Frogs",
+              "Player": "Evgeni Malkin"
+            }
+          ],
+          "Art Ross": [
+            {
+              "Team": "Tellus Tacos",
+              "Player": ""
+            }
+          ],
+          "Rocket Richard": [
+            {
+              "Team": "Tellus Tacos",
+              "Player": ""
+            }
+          ],
+          "Norris": [
+            {
+              "Team": "Bönan Bonebreakers",
+              "Player": ""
+            }
+          ],
+          "Vezina": [
+            {
+              "Team": "Bönan Bonebreakers",
+              "Player": ""
+            }
+          ],
+          "Calder": [
+            {
+              "Team": "Mosebacke Mooseheads",
+              "Player": ""
+            }
+          ],
+          "Lady Byng": [
+            {
+              "Team": "Frescati Frogs",
+              "Player": ""
+            }
+          ],
+          "Selke": [
+            {
+              "Team": "Wan Chai Oysters",
+              "Player": ""
+            }
+          ],
+          "Jack Adams": [
+            {
+              "Team": "Tellus Tacos",
+              "Player": ""
+            }
+          ]
+        },
+        "awards": {},
+        "bounties": {}
+      },
+      "postseason": {
+        "winners": {
+          "Stanley Cup": [
+            {
+              "Team": "Tellus Tacos",
+              "Player": ""
+            }
+          ],
+          "President's Trophy": [
+            {
+              "Team": "Wan Chai Oysters",
+              "Player": ""
+            }
+          ]
+        },
+        "awards": {
+          "Conn Smythe": [
+            {
+              "Team": "Tellus Tacos",
+              "Player": "Dustin Brown"
+            }
+          ]
+        },
+        "bounties": {},
+        "achievements": {
+          "Clarence S. Campbell": [
+            {
+              "Team": "Tellus Tacos",
+              "Player": ""
+            }
+          ],
+          "Prince of Wales": [
+            {
+              "Team": "Wan Chai Oysters",
+              "Player": ""
+            }
+          ]
+        }
+      },
+      "shadowtrackers": {
+        "Runner Up": [
+          {
+            "Team": "Wan Chai Oysters",
+            "Player": ""
+          }
+        ],
+        "True President's Trophy": [
+          {
+            "Team": "Wan Chai Oysters",
+            "Player": ""
+          }
+        ]
+      }
+    }
+  }
+}

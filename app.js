@@ -22,6 +22,9 @@ const trophyMeta = {
   "Clarence S. Campbell": { icon: "🏟️", description: "Western Champion" },
   "Prince of Wales": { icon: "🛡️", description: "Eastern Champion" },
   "Orange Lantern": { icon: "🟠", description: "Looser of the looser bracket" },
+  "Runner Up": { icon: "👟", description: "Shadow runner-up" },
+  "True President's Trophy": { icon: "⚖️", description: "Legitimate president" },
+  "Fake President's Trophy": { icon: "🕵️", description: "Fraudulent fake winner" },
 };
 
 const seasonSelect = document.getElementById("seasonSelect");
@@ -35,14 +38,17 @@ const leaderboard = document.getElementById("leaderboard");
 const tabMatchupBoard = document.getElementById("tabMatchupBoard");
 const tabSeasonLeaderboard = document.getElementById("tabSeasonLeaderboard");
 const tabDraftClass = document.getElementById("tabDraftClass");
+const tabBingoBoard = document.getElementById("tabBingoBoard");
 const matchupPane = document.getElementById("matchupPane");
 const leaderboardPane = document.getElementById("leaderboardPane");
 const draftClassPane = document.getElementById("draftClassPane");
+const bingoBoardPane = document.getElementById("bingoBoardPane");
 const draftClassTabSeason = document.getElementById("draftClassTabSeason");
 
 const groupLabels = {
   regseason: "Regular Season",
   postseason: "Playoffs",
+  shadowtrackers: "Shadow Trackers",
 };
 
 const sectionLabels = {
@@ -56,10 +62,53 @@ const sectionLabels = {
 const trophyDataUrl = window.__GHL_TROPHY_DATA_URL__ || "/trophy-data";
 const matchupDataUrl = window.__GHL_MATCHUP_DATA_URL__ || "/matchup-data";
 const draftClassDataUrl = window.__GHL_DRAFT_CLASS_DATA_URL__ || "/drafted-player-stats";
+const trophyHistoryDataUrl = window.__GHL_TROPHY_DATA_HISTORY_URL__ || "/trophy-data-history";
+const matchupHistoryDataUrl = window.__GHL_MATCHUP_DATA_HISTORY_URL__ || "/matchup-data-history";
+const draftClassHistoryDataUrl = window.__GHL_DRAFT_CLASS_HISTORY_DATA_URL__ || "/drafted-player-stats-history";
+const ownerConfigUrl = window.__GHL_OWNER_CONFIG_URL__ || "archived_years/owner_config.csv";
 
 let trackerData = {};
 let matchupData = {};
 let draftClassData = {};
+let historicalTrackerData = {};
+let historicalMatchupData = {};
+let historicalDraftClassData = {};
+let ownerConfigMap = new Map();
+const fallbackOwnerConfigMap = new Map([
+  ["barbeque steamers", "ÖGB"],
+  ["brussels belgian blues", "TACO"],
+  ["multiple scorgasms", "GREVE"],
+  ["wan chai oysters", "OYST"],
+  ["gävle raiders", "RAID"],
+  ["gavle raiders", "RAID"],
+  ["warszawa white russians", "WARS"],
+  ["tessin bourbons", "WARS"],
+  ["taipei 101s", "101S"],
+  ["taipei 101's", "101S"],
+  ["södermalm hipsters", "ÖGB"],
+  ["sodermalm hipsters", "ÖGB"],
+  ["bönan bonebreakers", "BBB"],
+  ["bonan bonebreakers", "BBB"],
+  ["tellus tacos", "TACO"],
+  ["frescati frogs", "FROGS"],
+  ["mosebacke mooseheads", "ÖGB"],
+  ["bangkok ladyboys", "LADY"],
+  ["birkastan babysitters", "RUN"],
+  ["valhalla valkyries", "VALK"],
+  ["tuna tacos", "TACO"],
+  ["031 nörrebro", "031N"],
+  ["031 norrebro", "031N"],
+  ["rinkeby runners", "RUN"],
+  ["essingen frogs", "FROGS"],
+  ["östermalm golden bananas", "ÖGB"],
+  ["ostermalm golden bananas", "ÖGB"],
+  ["ömalm golden bananas", "ÖGB"],
+  ["omalm golden bananas", "ÖGB"],
+  ["västermalm frogs", "FROGS"],
+  ["vastermalm frogs", "FROGS"],
+  ["hagaström hellraisers", "HELL"],
+  ["hagastrom hellraisers", "HELL"],
+]);
 let activeTrophyCard = null;
 let activeLeaderboardRow = null;
 let activeMatchupIndex = -1;
@@ -99,6 +148,7 @@ function setTopBoardTab(tabKey) {
   const isMatchup = tabKey === "matchup";
   const isLeaderboard = tabKey === "leaderboard";
   const isDraftClass = tabKey === "draft-class";
+  const isBingo = tabKey === "bingo";
 
   if (tabMatchupBoard) {
     tabMatchupBoard.classList.toggle("is-active", isMatchup);
@@ -112,6 +162,10 @@ function setTopBoardTab(tabKey) {
     tabDraftClass.classList.toggle("is-active", isDraftClass);
     tabDraftClass.setAttribute("aria-selected", String(isDraftClass));
   }
+  if (tabBingoBoard) {
+    tabBingoBoard.classList.toggle("is-active", isBingo);
+    tabBingoBoard.setAttribute("aria-selected", String(isBingo));
+  }
   if (matchupPane) {
     matchupPane.hidden = !isMatchup;
   }
@@ -124,9 +178,19 @@ function setTopBoardTab(tabKey) {
       renderDraftClassBoard(seasonSelect.value);
     }
   }
+  if (bingoBoardPane) {
+    bingoBoardPane.hidden = !isBingo;
+    if (isBingo) {
+      renderBingoBoard();
+    }
+  }
 }
 
 function formatValue(metric, value) {
+  if (value === null || value === undefined || value === "") {
+    return "";
+  }
+
   if (typeof value === "number") {
     return Number.isInteger(value) ? String(value) : Number(value).toFixed(2);
   }
@@ -147,8 +211,13 @@ function getWinnerFromEntry(entryValue) {
 
     const teamName = firstRow.Team || firstRow["Fantasy Team"] || firstRow["Team Name"] || "Unknown Team";
     const playerName = firstRow.Player || firstRow["Player Name"] || "";
-    const value = firstRow.Fpts ?? firstRow.Points ?? firstRow.score ?? firstRow.value;
-    return [teamName, playerName ? `${playerName} • ${formatValue("", value)}` : formatValue("", value)];
+    const weekLabel = firstRow.Week || firstRow.week || "";
+    const value = firstRow.Fpts ?? firstRow.score ?? firstRow.value;
+    const detailLabel = playerName || weekLabel;
+    const summaryText = detailLabel
+      ? (value === null || value === undefined ? detailLabel : `${detailLabel} • ${formatValue("", value)}`)
+      : (value === null || value === undefined ? "" : formatValue("", value));
+    return [teamName, summaryText];
   }
 
   if (entryValue.status === "placeholder") {
@@ -177,7 +246,8 @@ function getDisplayRows(itemValue) {
     return itemValue.map((row) => ({
       team: row?.Team || row?.["Fantasy Team"] || row?.["Team Name"] || "Unknown Team",
       player: row?.Player || row?.["Player Name"] || "",
-      value: row?.Fpts ?? row?.Points ?? row?.score ?? row?.value ?? 0,
+      week: row?.Week || row?.week || "",
+      value: row?.Fpts ?? row?.score ?? row?.value ?? null,
     }));
   }
 
@@ -205,8 +275,8 @@ function collectSeasonWinners(value, winners = []) {
     if (row) {
       const teamName = row.Team || row["Fantasy Team"] || row["Team Name"] || "Unknown Team";
       if (teamName !== "Winner/Leader TBD" && teamName !== "Unknown Team") {
-        const teamValue = row.Fpts ?? row.Points ?? row.score ?? row.value ?? 0;
-        winners.push([teamName, formatValue("", teamValue)]);
+        const teamValue = row.Fpts ?? row.score ?? row.value ?? null;
+        winners.push([teamName, teamValue === null || teamValue === undefined ? "" : formatValue("", teamValue)]);
       }
     }
     return winners;
@@ -227,8 +297,8 @@ function collectSeasonWinners(value, winners = []) {
       if (firstRow) {
         const teamName = firstRow.Team || firstRow["Fantasy Team"] || firstRow["Team Name"] || "Unknown Team";
         if (teamName !== "Winner/Leader TBD" && teamName !== "Unknown Team") {
-          const teamValue = firstRow.Fpts ?? firstRow.Points ?? firstRow.score ?? firstRow.value ?? 0;
-          winners.push([teamName, formatValue("", teamValue)]);
+          const teamValue = firstRow.Fpts ?? firstRow.score ?? firstRow.value ?? null;
+          winners.push([teamName, teamValue === null || teamValue === undefined ? "" : formatValue("", teamValue)]);
         }
       }
       continue;
@@ -294,11 +364,38 @@ function collectLeaderboardLeaders(seasonData) {
 }
 
 function renderLeaderboard(seasonKey) {
-  const seasonData = trackerData.season?.[seasonKey] || {};
+  const seasonPayload = getSeasonPayloadForSource("trophy", seasonKey);
+  const seasonData = seasonPayload?.season?.[seasonKey] || {};
   const teamLeads = collectLeaderboardLeaders(seasonData);
 
+  const getPinnedBottomOrder = (teamName) => {
+    const normalized = String(teamName || "").trim().toLowerCase();
+    if (normalized === "carry over") {
+      return 1;
+    }
+    if (normalized === "withheld") {
+      return 2;
+    }
+    return 0;
+  };
+
   const rows = [...teamLeads.entries()]
-    .sort((a, b) => b[1].length - a[1].length || a[0].localeCompare(b[0]))
+    .sort((a, b) => {
+      const aPinned = getPinnedBottomOrder(a[0]);
+      const bPinned = getPinnedBottomOrder(b[0]);
+
+      if (aPinned !== bPinned) {
+        if (aPinned === 0) {
+          return -1;
+        }
+        if (bPinned === 0) {
+          return 1;
+        }
+        return aPinned - bPinned;
+      }
+
+      return b[1].length - a[1].length || a[0].localeCompare(b[0]);
+    })
     .map(([teamName, leads], index) => {
       const leadCount = leads.length;
       const leadList = leads
@@ -414,7 +511,8 @@ function formatMatchupCell(column, value) {
 }
 
 function getMatchupRows(seasonKey, matchupName) {
-  const seasonNode = matchupData.season?.[seasonKey] || {};
+  const matchupSource = getSeasonPayloadForSource("matchup", seasonKey);
+  const seasonNode = matchupSource?.season?.[seasonKey] || {};
   const rows = seasonNode.matchups?.[matchupName];
   return Array.isArray(rows) ? rows : [];
 }
@@ -512,7 +610,8 @@ const draftClassColumnWidths = {
 };
 
 function getDraftClassRows(seasonKey) {
-  const seasonNode = draftClassData.season?.[seasonKey] || {};
+  const draftSource = getSeasonPayloadForSource("draft", seasonKey);
+  const seasonNode = draftSource?.season?.[seasonKey] || {};
   const rows = seasonNode.players || [];
   return Array.isArray(rows) ? rows : [];
 }
@@ -749,9 +848,12 @@ function renderDraftClassBoard(seasonKey) {
                 ${nhlTeamOptions}
               </select>
             </label>
-            <div class="draft-class-vabo-note">VABO = F: Value Above Round Average. D &amp; G: Value Above Average full sample.</div>
           </div>
         </div>
+      </div>
+      <div class="draft-class-vabo-note draft-class-vabo-note--full">VABO = F: Value Above Round Average. D &amp; G: Value Above Average full sample.</div>
+
+      <div class="matchup-table-wrap draft-class-table-wrap">
       </div>
 
       <div class="matchup-table-wrap draft-class-table-wrap">
@@ -840,7 +942,8 @@ function renderMatchupBoard(seasonKey) {
     matchupTableScrollLeft = previousTableWrap.scrollLeft;
   }
 
-  const seasonNode = matchupData.season?.[seasonKey] || {};
+  const matchupSource = getSeasonPayloadForSource("matchup", seasonKey);
+  const seasonNode = matchupSource?.season?.[seasonKey] || {};
   const matchupMap = seasonNode.matchups || {};
   const matchupNames = Object.keys(matchupMap).sort((a, b) => parseMatchupNumber(a) - parseMatchupNumber(b));
 
@@ -954,8 +1057,8 @@ function getWinnerFromItem(itemValue) {
       return null;
     }
 
-    const teamValue = row.Fpts ?? row.Points ?? row.score ?? row.value ?? 0;
-    return [teamName, formatValue("", teamValue)];
+    const teamValue = row.Fpts ?? row.score ?? row.value ?? null;
+    return [teamName, teamValue === null || teamValue === undefined ? "" : formatValue("", teamValue)];
   }
 
   const entries = Object.entries(itemValue).filter(([key]) => key !== "status" && key !== "value");
@@ -981,7 +1084,7 @@ function getWinnerFromItem(itemValue) {
 function renderCard(itemName, itemValue) {
   const meta = trophyMeta[itemName] || { icon: "🏒", description: "League item" };
   const winner = getWinnerFromEntry(itemValue);
-  const summaryText = winner ? `${winner[0]} • ${formatValue(itemName, winner[1])}` : "Pending";
+  let summaryText = winner ? (winner[1] ? `${winner[0]} • ${winner[1]}` : winner[0]) : "Pending";
 
   const card = document.createElement("article");
   card.className = "trophy-card";
@@ -1018,13 +1121,15 @@ function renderCard(itemName, itemValue) {
       <ul class="trophy-list">
         ${listEntries.length
           ? listEntries.map((row, index) => {
-              const playerHtml = `<span class="team-player">${row.player || ""}</span>`;
+              const detailLabel = row.player || row.week || "";
+              const playerHtml = detailLabel ? `<span class="team-player">${detailLabel}</span>` : "";
+              const valueHtml = row.value === null || row.value === undefined ? "" : `<span class="team-value">${formatValue(itemName, row.value)}</span>`;
               return `
                 <li>
                   <span class="rank">${index + 1}</span>
                   <span class="team-name">${row.team}</span>
                   ${playerHtml}
-                  <span class="team-value">${formatValue(itemName, row.value)}</span>
+                  ${valueHtml}
                 </li>
               `;
             }).join("")
@@ -1056,11 +1161,448 @@ function renderCard(itemName, itemValue) {
   return card;
 }
 
+function normalizeOwnerKey(value) {
+  if (value === null || value === undefined) {
+    return "";
+  }
+  return String(value)
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^\w\s&'’.-]/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+}
+
+function parseOwnerConfigCsv(csvText) {
+  const lines = String(csvText || "").split(/\r?\n/).filter((line) => line.trim());
+  if (lines.length < 2) {
+    return new Map();
+  }
+
+  const entries = new Map();
+  lines.slice(1).forEach((line) => {
+    const columns = line.split(";").map((value) => value.trim());
+    if (columns.length < 2) {
+      return;
+    }
+
+    const gmName = columns[0];
+    const teamName = columns[1];
+    if (!gmName || !teamName) {
+      return;
+    }
+
+    entries.set(normalizeOwnerKey(teamName), gmName);
+  });
+
+  return entries;
+}
+
+function getOwnerConfigUrlCandidates() {
+  const candidates = new Set();
+  candidates.add(ownerConfigUrl);
+  candidates.add("archived_years/owner_config.csv");
+  candidates.add("/archived_years/owner_config.csv");
+
+  try {
+    const dataUrl = new URL(trophyDataUrl, window.location.href);
+    const versionMatch = String(ownerConfigUrl).match(/[?&]v=([^&]+)/);
+    const version = versionMatch ? `?v=${encodeURIComponent(versionMatch[1])}` : "";
+    candidates.add(`${dataUrl.origin}/archived_years/owner_config.csv${version}`);
+  } catch (error) {
+    // Ignore malformed URLs and proceed with local candidates.
+  }
+
+  return Array.from(candidates);
+}
+
+async function loadOwnerConfig() {
+  try {
+    const urlCandidates = getOwnerConfigUrlCandidates();
+    for (const url of urlCandidates) {
+      const response = await fetch(url, { cache: "no-store" });
+      if (!response.ok) {
+        continue;
+      }
+
+      const text = await response.text();
+      const entries = parseOwnerConfigCsv(text);
+      if (entries.size > 0) {
+        ownerConfigMap = entries;
+        return;
+      }
+    }
+
+    ownerConfigMap = new Map(fallbackOwnerConfigMap);
+  } catch (error) {
+    ownerConfigMap = new Map(fallbackOwnerConfigMap);
+  }
+}
+
+function getOwnerForTeam(teamName) {
+  if (!teamName) {
+    return "Unknown";
+  }
+
+  const rawText = String(teamName).trim();
+  const normalized = normalizeOwnerKey(rawText);
+  const directOwner = ownerConfigMap.get(normalized);
+  if (directOwner) {
+    return directOwner;
+  }
+
+  const normalizedNoSpaces = normalized.replace(/\s+/g, "");
+  for (const [mapKey, gmName] of ownerConfigMap.entries()) {
+    if (mapKey === normalized || mapKey.replace(/\s+/g, "") === normalizedNoSpaces) {
+      return gmName;
+    }
+  }
+
+  const aliasVariants = [
+    normalized.replace(/golden|bananas/gi, ""),
+    normalized.replace(/gold/gi, ""),
+    normalized.replace(/bananas/gi, ""),
+    normalized.replace(/[^a-z0-9]/gi, ""),
+    normalized.replace(/\s+/g, ""),
+    rawText.toLowerCase().replace(/[^a-z0-9]/gi, ""),
+  ];
+
+  for (const variant of aliasVariants) {
+    for (const [mapKey, gmName] of ownerConfigMap.entries()) {
+      const aliasKey = mapKey.replace(/[^a-z0-9]/gi, "");
+      if (aliasKey === variant.replace(/[^a-z0-9]/gi, "")) {
+        return gmName;
+      }
+    }
+  }
+
+  const fallbackOwner = fallbackOwnerConfigMap.get(normalized)
+    || fallbackOwnerConfigMap.get(normalizedNoSpaces)
+    || fallbackOwnerConfigMap.get(rawText.toLowerCase());
+  if (fallbackOwner) {
+    return fallbackOwner;
+  }
+
+  return rawText || "Unknown";
+}
+
+function getBingoSeasonSections() {
+  return [
+    ["regseason", "trophies"],
+    ["regseason", "awards"],
+    ["regseason", "bounties"],
+    ["postseason", "winners"],
+    ["postseason", "awards"],
+    ["postseason", "bounties"],
+    ["postseason", "achievements"],
+    ["shadowtrackers", null],
+  ];
+}
+
+const bingoBoardPrimaryLayout = [
+  "Stanley Cup",
+  "President's Trophy",
+  "Clarence S. Campbell",
+  "Prince of Wales",
+  "Hart",
+  "Conn Smythe",
+  "Art Ross",
+  "Rocket Richard",
+  "Norris",
+  "Vezina",
+  "Calder",
+  "Lady Byng",
+  "Selke",
+  "Jack Adams",
+  "Jim Gregory",
+  "Back's Backe Back-2-Back",
+  "It's Vegas Baby!",
+  "Scout's Honor",
+  "Fantalytic's Frenzy",
+  "The King is Dead!",
+  "Chasing the Cup!",
+  "Bitter Looser or Righteous Winner!",
+  "Orange Lantern",
+];
+
+const bingoBoardShadowRows = [
+  "Runner Up",
+  "True President's Trophy",
+  "Fake President's Trophy",
+];
+
+function normalizeBingoItemName(value) {
+  return String(value || "")
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[’]/g, "'")
+    .replace(/[^a-zA-Z0-9]+/g, " ")
+    .trim()
+    .toLowerCase();
+}
+
+function shouldHideBingoOwnerColumn(ownerName) {
+  const normalized = normalizeBingoItemName(ownerName);
+  return normalized === "withheld" || normalized === "carry over";
+}
+
+const bingoLayoutByNormalizedKey = new Map(
+  [...bingoBoardPrimaryLayout, ...bingoBoardShadowRows].map((itemName) => [normalizeBingoItemName(itemName), itemName])
+);
+
+function getLeaderboardRankValue(rawValue) {
+  if (typeof rawValue === "number") {
+    return rawValue;
+  }
+
+  if (typeof rawValue !== "string") {
+    return Number.NEGATIVE_INFINITY;
+  }
+
+  const parsed = Number(rawValue.replace(/[^0-9.-]/g, ""));
+  if (!Number.isNaN(parsed) && String(rawValue).includes(":")) {
+    return parsed;
+  }
+  if (!Number.isNaN(parsed) && String(rawValue).includes("-")) {
+    const parts = rawValue.split("-").map((part) => Number(part.trim().replace(/[^0-9.-]/g, ""))).filter((part) => !Number.isNaN(part));
+    if (parts.length >= 3 && parts[0] !== undefined) {
+      return parts[0] * 1000 - parts[1] * 10 + parts[2];
+    }
+  }
+
+  if (!Number.isNaN(parsed)) {
+    return parsed;
+  }
+
+  return Number.NEGATIVE_INFINITY;
+}
+
+function isLowestWinsAward(itemName) {
+  return String(itemName || "").trim().toLowerCase().includes("lady byng");
+}
+
+function getBingoWinnerOwners(itemValue, seasonKey, itemName = "") {
+  if (!itemValue) {
+    return [];
+  }
+
+  const teamNames = [];
+
+  if (Array.isArray(itemValue)) {
+    const firstEntry = itemValue.find((entry) => entry && typeof entry === "object");
+    if (!firstEntry) {
+      return [];
+    }
+
+    const teamName = firstEntry.Team || firstEntry["Fantasy Team"] || firstEntry["Team Name"] || "";
+    if (teamName && teamName !== "Winner/Leader TBD") {
+      teamNames.push(String(teamName).trim());
+    }
+
+    return Array.from(new Set(teamNames.map((name) => getOwnerForTeam(name)).filter(Boolean)))
+      .sort((left, right) => left.localeCompare(right));
+  }
+
+  if (typeof itemValue === "object") {
+    const leaderboardEntries = Object.entries(itemValue)
+      .filter(([key]) => key !== "status" && key !== "value" && key !== "Winner/Leader TBD")
+      .map(([teamName, teamValue]) => ({ teamName, teamValue }))
+      .filter(({ teamName }) => teamName);
+
+    if (leaderboardEntries.length > 0) {
+      const topEntry = leaderboardEntries.reduce((best, current) => {
+        const currentScore = getLeaderboardRankValue(current.teamValue);
+        const bestScore = getLeaderboardRankValue(best.teamValue);
+        const isLowestWins = isLowestWinsAward(itemName);
+        const shouldReplace = isLowestWins ? currentScore < bestScore : currentScore > bestScore;
+        if (shouldReplace) {
+          return current;
+        }
+        return best;
+      }, leaderboardEntries[0]);
+
+      const topOwner = getOwnerForTeam(topEntry.teamName);
+      return topOwner ? [topOwner] : [];
+    }
+  }
+
+  return [];
+}
+
+function getSeasonPayloadForSource(sourceKey, seasonKey) {
+  const sourceMap = {
+    trophy: { active: trackerData, history: historicalTrackerData },
+    matchup: { active: matchupData, history: historicalMatchupData },
+    draft: { active: draftClassData, history: historicalDraftClassData },
+  };
+
+  const targetSource = sourceMap[sourceKey] || { active: {}, history: {} };
+  const activeSeasonMap = targetSource.active?.season || {};
+  const historySeasonMap = targetSource.history?.season || {};
+
+  if (seasonKey && Object.prototype.hasOwnProperty.call(activeSeasonMap, seasonKey)) {
+    return targetSource.active;
+  }
+  if (seasonKey && Object.prototype.hasOwnProperty.call(historySeasonMap, seasonKey)) {
+    return targetSource.history;
+  }
+
+  return targetSource.active || targetSource.history || {};
+}
+
+function buildBingoBoardData() {
+  const seasonMap = {
+    ...(historicalTrackerData.season || {}),
+    ...(trackerData.season || {}),
+  };
+  const counts = new Map();
+  const currentSeasonCounts = new Set();
+  const rowOrder = [];
+  const gmSet = new Set();
+
+  const seasonKeys = Object.keys(seasonMap).sort((left, right) => right.localeCompare(left));
+  const latestSeasonKey = seasonKeys[0] || "2026-2027";
+
+  const orderedSections = getBingoSeasonSections();
+  Object.keys(seasonMap).forEach((seasonKey) => {
+    const seasonData = seasonMap[seasonKey] || {};
+    orderedSections.forEach(([groupKey, sectionKey]) => {
+      const container = sectionKey ? (seasonData[groupKey] || {})[sectionKey] : (seasonData[groupKey] || {});
+      if (!container || typeof container !== "object") {
+        return;
+      }
+
+      Object.entries(container).forEach(([itemName, itemValue]) => {
+        const normalizedItemKey = normalizeBingoItemName(itemName);
+        const displayItemName = bingoLayoutByNormalizedKey.get(normalizedItemKey) || itemName;
+
+        if (!rowOrder.includes(displayItemName)) {
+          rowOrder.push(displayItemName);
+        }
+
+        const owners = getBingoWinnerOwners(itemValue, seasonKey, itemName);
+        owners.forEach((ownerName) => {
+          gmSet.add(ownerName);
+          const totalKey = `${displayItemName}::${ownerName}`;
+          const nextValue = (counts.get(totalKey) || 0) + 1;
+          counts.set(totalKey, nextValue);
+
+          if (seasonKey === latestSeasonKey) {
+            currentSeasonCounts.add(totalKey);
+          }
+        });
+      });
+    });
+  });
+
+  const rowOrderSet = new Set(rowOrder);
+  const primaryRows = [
+    ...bingoBoardPrimaryLayout.filter((itemName) => rowOrderSet.has(itemName)),
+    ...rowOrder.filter((itemName) => !bingoBoardPrimaryLayout.includes(itemName) && !bingoBoardShadowRows.includes(itemName)),
+  ];
+  const shadowRows = bingoBoardShadowRows.filter((itemName) => rowOrderSet.has(itemName));
+
+  const getOwnerCountForItem = (ownerName, itemName) => counts.get(`${itemName}::${ownerName}`) || 0;
+  const getOwnerUniquePrimaryCount = (ownerName) => {
+    let uniqueCount = 0;
+    bingoBoardPrimaryLayout.forEach((itemName) => {
+      if (getOwnerCountForItem(ownerName, itemName) > 0) {
+        uniqueCount += 1;
+      }
+    });
+    return uniqueCount;
+  };
+
+  const gmColumns = Array.from(gmSet)
+    .filter((ownerName) => !shouldHideBingoOwnerColumn(ownerName))
+    .sort((left, right) => {
+    const stanleyDiff = getOwnerCountForItem(right, "Stanley Cup") - getOwnerCountForItem(left, "Stanley Cup");
+    if (stanleyDiff !== 0) {
+      return stanleyDiff;
+    }
+
+    const uniqueDiff = getOwnerUniquePrimaryCount(right) - getOwnerUniquePrimaryCount(left);
+    if (uniqueDiff !== 0) {
+      return uniqueDiff;
+    }
+
+    return left.localeCompare(right);
+  });
+  return { primaryRows, shadowRows, gmColumns, counts, currentSeasonCounts };
+}
+
+function renderBingoBoard() {
+  if (!bingoBoardPane) {
+    return;
+  }
+
+  const { primaryRows, shadowRows, gmColumns, counts, currentSeasonCounts } = buildBingoBoardData();
+
+  const rowOrder = [...primaryRows, ...shadowRows];
+
+  if (!rowOrder.length || !gmColumns.length) {
+    bingoBoardPane.innerHTML = '<div class="empty-state">No award history available for the Bingo Board.</div>';
+    return;
+  }
+
+  const headerCells = [
+    '<th class="bingo-grid-header bingo-grid-corner" aria-label="Award title"></th>',
+    ...gmColumns.map((gm) => {
+      const width = Math.max(18, Math.min(38, gm.length * 5.6 + 8));
+      return `<th class="bingo-grid-header" style="--gm-col-width:${width}px; width:${width}px; min-width:${width}px; max-width:${width}px;"><span>${gm}</span></th>`;
+    }),
+  ].join("");
+
+  const renderDataRow = (itemName) => {
+    const cells = gmColumns.map((gm) => {
+      const totalKey = `${itemName}::${gm}`;
+      const count = counts.get(totalKey) || 0;
+      const isCurrentSeasonWinner = currentSeasonCounts.has(totalKey);
+      if (!count) {
+        return '<td class="bingo-grid-cell bingo-grid-empty"></td>';
+      }
+      const cellClass = isCurrentSeasonWinner ? "bingo-grid-won-current" : "bingo-grid-won";
+      return `<td class="bingo-grid-cell ${cellClass}" title="${gm}: ${count} win${count === 1 ? "" : "s"}"><span class="bingo-count-pill">${count}</span></td>`;
+    });
+
+    return `<tr><th class="bingo-row-label">${itemName}</th>${cells.join("")}</tr>`;
+  };
+
+  const primaryRowsHtml = primaryRows.map((itemName) => renderDataRow(itemName)).join("");
+  const shadowRowsHtml = shadowRows.map((itemName) => renderDataRow(itemName)).join("");
+  const breakRowHtml = shadowRows.length
+    ? `<tr class="bingo-row-break"><th class="bingo-row-break-label" colspan="${gmColumns.length + 1}"></th></tr>`
+    : "";
+  const bodyRows = `${primaryRowsHtml}${breakRowHtml}${shadowRowsHtml}`;
+
+  bingoBoardPane.innerHTML = `
+    <section class="bingo-board-card">
+      <div class="bingo-board-header">
+        <div>
+          <p class="eyebrow">Bingo Board</p>
+          <h3 class="section-header">All-time GM title history</h3>
+        </div>
+      </div>
+      <div class="bingo-board-wrap">
+        <table class="bingo-board-table">
+          <thead>
+            <tr>${headerCells}</tr>
+          </thead>
+          <tbody>${bodyRows}</tbody>
+        </table>
+      </div>
+    </section>
+  `;
+}
+
 function renderTrophies(seasonKey) {
-  const seasonData = trackerData.season?.[seasonKey] || {};
+  const seasonPayload = getSeasonPayloadForSource("trophy", seasonKey);
+  const seasonData = seasonPayload?.season?.[seasonKey] || {};
   const seasonGroups = [
     { key: "regseason", label: "Regular Season" },
     { key: "postseason", label: "Playoffs" },
+    { key: "shadowtrackers", label: "Shadow Trackers" },
   ];
 
   if (seasonTitle) {
@@ -1091,6 +1633,7 @@ function renderTrophies(seasonKey) {
   if (draftClassPane) {
     renderDraftClassBoard(seasonKey);
   }
+  renderBingoBoard();
 
   const hasAnyContent = seasonGroups.some(({ key }) => {
     const bucket = seasonData[key];
@@ -1115,6 +1658,14 @@ function renderTrophies(seasonKey) {
     groupHeader.className = "season-group-header";
     groupHeader.textContent = label;
     groupWrap.appendChild(groupHeader);
+
+    if (key === "shadowtrackers") {
+      Object.entries(groupValue).forEach(([itemName, itemValue]) => {
+        groupWrap.appendChild(renderCard(itemName, itemValue));
+      });
+      trophyGrid.appendChild(groupWrap);
+      return;
+    }
 
     const orderedSections = ["trophies", "awards", "bounties", "achievements", "winners"];
 
@@ -1144,10 +1695,13 @@ function renderTrophies(seasonKey) {
 }
 
 async function loadTrackerData() {
-  const [trophyResponse, matchupResponse, draftClassResponse] = await Promise.all([
-    fetch(trophyDataUrl, { cache: "no-store" }),
-    fetch(matchupDataUrl, { cache: "no-store" }),
+  const [trophyResponse, matchupResponse, draftClassResponse, historyTrophyResponse, historyMatchupResponse, historyDraftClassResponse] = await Promise.all([
+    fetch(trophyDataUrl, { cache: "no-store" }).catch(() => ({ ok: false, status: 0 })),
+    fetch(matchupDataUrl, { cache: "no-store" }).catch(() => ({ ok: false, status: 0 })),
     fetch(draftClassDataUrl, { cache: "no-store" }).catch(() => ({ ok: false, status: 0 })),
+    fetch(trophyHistoryDataUrl, { cache: "no-store" }).catch(() => ({ ok: false, status: 0 })),
+    fetch(matchupHistoryDataUrl, { cache: "no-store" }).catch(() => ({ ok: false, status: 0 })),
+    fetch(draftClassHistoryDataUrl, { cache: "no-store" }).catch(() => ({ ok: false, status: 0 })),
   ]);
 
   if (!trophyResponse.ok) {
@@ -1157,14 +1711,21 @@ async function loadTrackerData() {
     throw new Error(`Failed to load matchup data (${matchupResponse.status})`);
   }
 
-  trackerData = await trophyResponse.json();
-  matchupData = await matchupResponse.json();
+  trackerData = trophyResponse.ok ? await trophyResponse.json() : { season: {} };
+  matchupData = matchupResponse.ok ? await matchupResponse.json() : { season: {} };
   draftClassData = draftClassResponse.ok ? await draftClassResponse.json() : { season: {} };
+  historicalTrackerData = historyTrophyResponse.ok ? await historyTrophyResponse.json() : { season: {} };
+  historicalMatchupData = historyMatchupResponse.ok ? await historyMatchupResponse.json() : { season: {} };
+  historicalDraftClassData = historyDraftClassResponse.ok ? await historyDraftClassResponse.json() : { season: {} };
+  await loadOwnerConfig();
 
   const seasonSet = new Set([
     ...Object.keys(trackerData.season || {}),
     ...Object.keys(matchupData.season || {}),
     ...Object.keys(draftClassData.season || {}),
+    ...Object.keys(historicalTrackerData.season || {}),
+    ...Object.keys(historicalMatchupData.season || {}),
+    ...Object.keys(historicalDraftClassData.season || {}),
   ]);
   const seasons = [...seasonSet].sort((a, b) => b.localeCompare(a));
 
@@ -1175,12 +1736,15 @@ async function loadTrackerData() {
     return;
   }
 
+  const preferredSeason = seasons.includes("2026-2027") ? "2026-2027" : seasons[0];
+
   seasonSelect.innerHTML = seasons
     .map((seasonKey) => `<option value="${seasonKey}">${seasonKey}</option>`)
     .join("");
 
-  seasonSelect.value = seasons[0];
-  renderTrophies(seasons[0]);
+  seasonSelect.value = preferredSeason;
+  renderBingoBoard();
+  renderTrophies(preferredSeason);
 }
 
 seasonSelect.addEventListener("change", (event) => {
@@ -1196,6 +1760,9 @@ if (tabSeasonLeaderboard) {
 }
 if (tabDraftClass) {
   tabDraftClass.addEventListener("click", () => setTopBoardTab("draft-class"));
+}
+if (tabBingoBoard) {
+  tabBingoBoard.addEventListener("click", () => setTopBoardTab("bingo"));
 }
 
 (async () => {

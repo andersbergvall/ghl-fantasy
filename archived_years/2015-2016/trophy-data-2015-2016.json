@@ -1,0 +1,45 @@
+{
+  "season": {
+    "2015-2016": {
+      "lastupdated": "October 9th 2026, 22:12",
+      "regseason": {
+        "trophies": {},
+        "awards": {},
+        "bounties": {}
+      },
+      "postseason": {
+        "winners": {
+          "Stanley Cup": [
+            {
+              "Team": "Warszawa White Russians",
+              "Player": ""
+            }
+          ],
+          "President's Trophy": [
+            {
+              "Team": "Brussels Belgian Blues",
+              "Player": ""
+            }
+          ]
+        },
+        "awards": {},
+        "bounties": {},
+        "achievements": {}
+      },
+      "shadowtrackers": {
+        "Runner Up": [
+          {
+            "Team": "Taipei 101s",
+            "Player": ""
+          }
+        ],
+        "True President's Trophy": [
+          {
+            "Team": "Brussels Belgian Blues",
+            "Player": ""
+          }
+        ]
+      }
+    }
+  }
+}

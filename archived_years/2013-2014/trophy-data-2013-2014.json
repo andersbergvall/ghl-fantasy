@@ -1,0 +1,45 @@
+{
+  "season": {
+    "2013-2014": {
+      "lastupdated": "October 9th 2026, 22:12",
+      "regseason": {
+        "trophies": {},
+        "awards": {},
+        "bounties": {}
+      },
+      "postseason": {
+        "winners": {
+          "Stanley Cup": [
+            {
+              "Team": "Barbeque Steamers",
+              "Player": ""
+            }
+          ],
+          "President's Trophy": [
+            {
+              "Team": "Multiple Scorgasms",
+              "Player": ""
+            }
+          ]
+        },
+        "awards": {},
+        "bounties": {},
+        "achievements": {}
+      },
+      "shadowtrackers": {
+        "Runner Up": [
+          {
+            "Team": "Brussels Belgian Blues",
+            "Player": ""
+          }
+        ],
+        "True President's Trophy": [
+          {
+            "Team": "Multiple Scorgasms",
+            "Player": ""
+          }
+        ]
+      }
+    }
+  }
+}

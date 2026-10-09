@@ -1,0 +1,45 @@
+{
+  "season": {
+    "2014-2015": {
+      "lastupdated": "October 9th 2026, 22:12",
+      "regseason": {
+        "trophies": {},
+        "awards": {},
+        "bounties": {}
+      },
+      "postseason": {
+        "winners": {
+          "Stanley Cup": [
+            {
+              "Team": "Wan Chai Oysters",
+              "Player": ""
+            }
+          ],
+          "President's Trophy": [
+            {
+              "Team": "Gävle Raiders",
+              "Player": ""
+            }
+          ]
+        },
+        "awards": {},
+        "bounties": {},
+        "achievements": {}
+      },
+      "shadowtrackers": {
+        "Runner Up": [
+          {
+            "Team": "Gävle Raiders",
+            "Player": ""
+          }
+        ],
+        "True President's Trophy": [
+          {
+            "Team": "Gävle Raiders",
+            "Player": ""
+          }
+        ]
+      }
+    }
+  }
+}

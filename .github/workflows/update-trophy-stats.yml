@@ -3,7 +3,7 @@ name: Update Trophy Stats
 on:
   workflow_dispatch:
   schedule:
-    - cron: "49 7 * * *"
+    - cron: "49 1 * * *"
       timezone: "Europe/Stockholm"
 
 jobs:
@@ -27,6 +27,9 @@ jobs:
           PUBLISH_TO_CLOUDFLARE_KV: "true"
           FANTRAX_LEAGUE_ID: ${{ secrets.FANTRAX_LEAGUE_ID }}
           WEEKS_IN_SEASON: ${{ vars.WEEKS_IN_SEASON || 22 }}
+          FIRST_WEEK: ${{ vars.FIRST_WEEK || 1 }}
+          FANTRAX_PLAYER_STATS_SEASON_OR_PROJECTION: ${{ vars.FANTRAX_PLAYER_STATS_SEASON_OR_PROJECTION || 'SEASON_31n_BY_PERIOD' }}
+          VEGAS_EXCLUDE_WEEK: ${{ vars.VEGAS_EXCLUDE_WEEK || '' }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_KV_NAMESPACE_ID_TROPHY_DATA: ${{ secrets.CLOUDFLARE_KV_NAMESPACE_ID_TROPHY_DATA }}

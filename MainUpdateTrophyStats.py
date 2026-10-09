@@ -23,17 +23,19 @@ DRAFT_RESULTS_CSV = INPUT_CSV_DIR / "DraftResults.csv"
 CALDER_CANDIDATES_CSV = INPUT_CSV_DIR / "CalderCandidates.csv"
 FANTALYTICS_FRENZY_CSV = INPUT_CSV_DIR / "FantalyticsFrenzy.csv"
 
-DEFAULT_LEAGUE_ID = "aer4wi7rmtgxmer0"
+DEFAULT_LEAGUE_ID = ""
 FANTRAX_PLAYER_STATS_URL = "https://www.fantrax.com/fxpa/downloadPlayerStats"
 FANTRAX_STANDINGS_URL = "https://www.fantrax.com/fxpa/downloadStandings"
 FANTRAX_MATCHUP_SCORES_URL = "https://www.fantrax.com/fxea/general/getMatchupScores"
 REQUIRED_COOKIE_KEYS = ("__cf_bm", "cf_clearance", "FX_RM", "JSESSIONID")
 
-_PLAYER_STATS_DF_CACHE: pd.DataFrame | None = None
-_PLAYER_STATS_BY_ID_CACHE: Dict[str, Dict[str, Any]] | None = None
-_STANDINGS_TABLES_CACHE: Dict[str, pd.DataFrame] | None = None
-_SCHEDULE_TABLES_CACHE: Dict[str, pd.DataFrame] | None = None
+_PLAYER_STATS_DF_CACHE: Dict[tuple[str, int], pd.DataFrame] = {}
+_PLAYER_STATS_BY_ID_CACHE: Dict[tuple[str, int], Dict[str, Dict[str, Any]]] = {}
+_STANDINGS_TABLES_CACHE: Dict[tuple[str, int], Dict[str, pd.DataFrame]] = {}
+_SCHEDULE_TABLES_CACHE: Dict[tuple[str, int], Dict[str, pd.DataFrame]] = {}
 DEFAULT_ENV_PATH = Path(r"C:\Users\sweabe\Dropbox\Desktop\GHL\env.txt")
+TROPHY_CONFIG_CSV = PROJECT_ROOT / "archived_years" / "trophy_config.csv"
+LEGACY_TROPHY_CONFIG_CSV = PROJECT_ROOT / "trophy_config.csv"
 
 STAT_CATEGORIES = [
     "Goals",
@@ -92,6 +94,111 @@ def normalize_fantrax_text(value: Any) -> Any:
     return normalized.strip()
 
 
+def normalize_tracker_item_name(value: Any) -> str:
+    """Normalize item names for matching config entries and manual assignments."""
+    if value is None:
+        return ""
+    return normalize_fantrax_text(str(value)).strip().lower()
+
+
+def get_season_end_year(season_key: str) -> int:
+    """Return the final year of a season key like 2025-2026."""
+    match = re.search(r"(\d{4})-(\d{4})", str(season_key or ""))
+    if match:
+        return int(match.group(2))
+    try:
+        return int(str(season_key).split("-")[-1][:4])
+    except (TypeError, ValueError, IndexError):
+        return 0
+
+
+def get_season_start_year(season_key: str) -> int:
+    """Return the first year of a season key like 2025-2026."""
+    match = re.search(r"(\d{4})-(\d{4})", str(season_key or ""))
+    if match:
+        return int(match.group(1))
+    try:
+        return int(str(season_key).split("-")[0][:4])
+    except (TypeError, ValueError, IndexError):
+        return 0
+
+
+def load_trophy_config() -> Dict[str, int]:
+    """Load trophy start years from trophy_config.csv, if present.
+
+    The config is intentionally permissive: it accepts common key names for the item title and
+    start year, and it supports both comma- and semicolon-delimited CSVs.
+    """
+    config_path = TROPHY_CONFIG_CSV if TROPHY_CONFIG_CSV.exists() else LEGACY_TROPHY_CONFIG_CSV
+    if not config_path.exists():
+        return {}
+
+    config: Dict[str, int] = {}
+    with config_path.open("r", encoding="utf-8-sig", newline="") as handle:
+        sample = handle.read(4096)
+        handle.seek(0)
+        delimiter = ";" if sample and ";" in sample and "," not in sample else ","
+        try:
+            reader = csv.DictReader(handle, delimiter=delimiter)
+        except csv.Error:
+            handle.seek(0)
+            reader = csv.DictReader(handle)
+
+        for row in reader:
+            if row is None:
+                continue
+
+            item_name = ""
+            for candidate_key in ("Item", "Award", "Name", "Trophy", "Trophy Name", "Achievement", "Tracker", "Label", "Title"):
+                value = row.get(candidate_key)
+                if value is not None and str(value).strip():
+                    item_name = str(value).strip()
+                    break
+            if not item_name:
+                continue
+
+            year_value = ""
+            for candidate_key in ("Year", "Started", "Start Year", "Year Started", "Start", "season_start", "year_started"):
+                value = row.get(candidate_key)
+                if value is not None and str(value).strip():
+                    year_value = str(value).strip()
+                    break
+            if not year_value:
+                continue
+
+            match = re.search(r"(\d{4})", year_value)
+            if not match:
+                continue
+
+            year_int = int(match.group(1))
+            config[normalize_tracker_item_name(item_name)] = year_int
+
+    return config
+
+
+def is_item_active_for_season(item_name: str, season_key: str, config: Dict[str, int] | None = None) -> bool:
+    """Return True if an award/trophy is valid for this season according to trophy_config.csv."""
+    if config is None:
+        config = load_trophy_config()
+    if not config:
+        return True
+
+    item_key = normalize_tracker_item_name(item_name)
+    if not item_key:
+        return True
+
+    item_year = config.get(item_key)
+    if item_year is None:
+        return True
+
+    return int(item_year) <= get_season_start_year(season_key)
+
+
+def is_matchup_data_active_for_season(season_key: str) -> bool:
+    """Fantrax matchup data is only available for seasons from 2019-2020 onward."""
+    return get_season_end_year(season_key) >= 2020
+
+
 def get_weeks_in_season() -> int:
     """Read the league season-week count from the environment, defaulting to 22."""
     raw_value = os.getenv("WEEKS_IN_SEASON", "22").strip()
@@ -99,6 +206,58 @@ def get_weeks_in_season() -> int:
         return max(1, int(float(raw_value)))
     except (TypeError, ValueError):
         return 22
+
+
+def get_first_week() -> int:
+    """Read the first matchup period to fetch from the environment, defaulting to 1."""
+    season_weeks = get_weeks_in_season()
+    raw_value = os.getenv("FIRST_WEEK", "1").strip()
+    try:
+        first_week = max(1, int(float(raw_value)))
+    except (TypeError, ValueError):
+        first_week = 1
+    return min(max(1, first_week), season_weeks)
+
+
+def get_vegas_exclude_weeks() -> set[int]:
+    """Read one or more excluded Vegas scoring periods from VEGAS_EXCLUDE_WEEK.
+
+    Supports a single integer (e.g. "12") or a comma-separated list (e.g. "12,13").
+    """
+    raw_value = os.getenv("VEGAS_EXCLUDE_WEEK", "").strip()
+    if not raw_value:
+        return set()
+
+    excluded_weeks: set[int] = set()
+    for token in str(raw_value).split(","):
+        candidate = token.strip()
+        if not candidate:
+            continue
+        try:
+            week = int(float(candidate))
+        except (TypeError, ValueError):
+            continue
+        if week >= 1:
+            excluded_weeks.add(week)
+    return excluded_weeks
+
+
+def require_fantrax_league_id(league_id: str | None = None) -> str:
+    """Require a league id from the caller or the env; never allow the stale hardcoded fallback."""
+    candidate = (league_id or os.getenv("FANTRAX_LEAGUE_ID", "")).strip()
+    if not candidate:
+        raise ValueError("FANTRAX_LEAGUE_ID is required. Set it in the environment before running the script.")
+    return candidate
+
+
+def has_fantrax_league_id(league_id: str | None = None) -> bool:
+    """Return True when a non-empty league id is available from the caller or environment."""
+    return bool((league_id or os.getenv("FANTRAX_LEAGUE_ID", "")).strip())
+
+
+def get_fantrax_player_stats_season_or_projection() -> str:
+    """Return the Fantrax season/projection mode used for player stats exports."""
+    return (os.getenv("FANTRAX_PLAYER_STATS_SEASON_OR_PROJECTION", "SEASON_31n_BY_PERIOD") or "SEASON_31n_BY_PERIOD").strip()
 
 
 def normalize_team_name(value: Any) -> str:
@@ -189,11 +348,13 @@ def download_standings_tables(
     """Download the standings CSV export and split it into Fantrax table frames."""
     global _STANDINGS_TABLES_CACHE
 
-    if _STANDINGS_TABLES_CACHE is not None and not force_refresh:
-        return _STANDINGS_TABLES_CACHE
+    league_id = require_fantrax_league_id(league_id)
+    season_weeks = weeks_in_season if weeks_in_season is not None else get_weeks_in_season()
+    cache_key = (league_id, int(max(1, season_weeks)))
+    if cache_key in _STANDINGS_TABLES_CACHE and not force_refresh:
+        return _STANDINGS_TABLES_CACHE[cache_key]
 
     load_env_file()
-    season_weeks = weeks_in_season if weeks_in_season is not None else get_weeks_in_season()
 
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
@@ -229,8 +390,8 @@ def download_standings_tables(
     if not tables:
         raise ValueError("Fantrax standings export did not include any parseable tables.")
 
-    _STANDINGS_TABLES_CACHE = tables
-    return _STANDINGS_TABLES_CACHE
+    _STANDINGS_TABLES_CACHE[cache_key] = tables
+    return _STANDINGS_TABLES_CACHE[cache_key]
 
 
 def parse_fantrax_standings_csv(csv_text: str) -> Dict[str, pd.DataFrame]:
@@ -378,8 +539,10 @@ def getTeamTopPeriodScore(league_id: str, reg_season_periods: int = 22) -> Dict[
     """Return each team's single best score from any fetched period."""
     url = "https://www.fantrax.com/fxea/general/getMatchupScores"
     best_by_team: Dict[str, float] = {}
+    first_week = get_first_week()
+    reg_season_periods = max(1, int(reg_season_periods))
 
-    for period in range(1, reg_season_periods + 1):
+    for period in range(first_week, reg_season_periods + 1):
         response = requests.get(url, params={"leagueId": league_id, "period": period}, timeout=30)
         response.raise_for_status()
         data = response.json()
@@ -439,6 +602,11 @@ def build_matchup_data_json(
     season_key: str = "2026-2027",
 ) -> Dict[str, Any]:
     """Build matchup-by-matchup team metrics from the Fantrax getMatchupScores endpoint."""
+    if not is_matchup_data_active_for_season(season_key):
+        return {"season": {season_key: {"lastupdated": "", "matchups": {}}}}
+
+    league_id = require_fantrax_league_id(league_id)
+
     def ordinal_day(day: int) -> str:
         if 10 <= day % 100 <= 20:
             suffix = "th"
@@ -452,11 +620,12 @@ def build_matchup_data_json(
 
     load_env_file()
     season_weeks = weeks_in_season if weeks_in_season is not None else get_weeks_in_season()
+    start_week = get_first_week()
 
     cumulative: Dict[str, Dict[str, float]] = {}
     matchup_payload: Dict[str, List[Dict[str, Any]]] = {}
 
-    for period in range(1, season_weeks + 1):
+    for period in range(start_week, season_weeks + 1):
         response = requests.get(
             FANTRAX_MATCHUP_SCORES_URL,
             params={"leagueId": league_id, "period": period},
@@ -577,11 +746,13 @@ def download_schedule_tables(
     """Download the SCHEDULE CSV export and split it into table frames."""
     global _SCHEDULE_TABLES_CACHE
 
-    if _SCHEDULE_TABLES_CACHE is not None and not force_refresh:
-        return _SCHEDULE_TABLES_CACHE
+    league_id = require_fantrax_league_id(league_id)
+    season_weeks = weeks_in_season if weeks_in_season is not None else get_weeks_in_season()
+    cache_key = (league_id, int(max(1, season_weeks)))
+    if cache_key in _SCHEDULE_TABLES_CACHE and not force_refresh:
+        return _SCHEDULE_TABLES_CACHE[cache_key]
 
     load_env_file()
-    season_weeks = weeks_in_season if weeks_in_season is not None else get_weeks_in_season()
 
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
@@ -617,15 +788,15 @@ def download_schedule_tables(
     if not tables:
         raise ValueError("Fantrax schedule export did not include any parseable tables.")
 
-    _SCHEDULE_TABLES_CACHE = tables
-    return _SCHEDULE_TABLES_CACHE
+    _SCHEDULE_TABLES_CACHE[cache_key] = tables
+    return _SCHEDULE_TABLES_CACHE[cache_key]
 
 
 def get_vegas_baby_schedule_leaderboard(
     league_id: str = DEFAULT_LEAGUE_ID,
     weeks_in_season: int | None = None,
     force_refresh: bool = False,
-) -> Dict[str, str]:
+) -> List[Dict[str, Any]]:
     """Return the top 12 weekly team scores from the Fantrax SCHEDULE CSV export.
 
     The schedule CSV is arranged as rows like:
@@ -634,12 +805,16 @@ def get_vegas_baby_schedule_leaderboard(
     so each row is a pair of team/score entries. We flatten each row into team-score pairs,
     then sort the full list descending and keep the top 12.
     """
+    league_id = require_fantrax_league_id(league_id)
     tables = download_schedule_tables(league_id=league_id, weeks_in_season=weeks_in_season, force_refresh=force_refresh)
     weekly_scores: List[tuple[str, int | None, float]] = []
+    excluded_weeks = get_vegas_exclude_weeks()
 
     scoring_period_pattern = re.compile(r"scoring period\s*(\d+)", re.IGNORECASE)
 
     def add_score(team_name: Any, score: Any, scoring_period: int | None) -> None:
+        if scoring_period is not None and scoring_period in excluded_weeks:
+            return
         if team_name is None:
             return
         cleaned_team = normalize_team_name(team_name)
@@ -693,19 +868,17 @@ def get_vegas_baby_schedule_leaderboard(
                 add_score(team_value, score_value, current_scoring_period)
 
     if not weekly_scores:
-        return {}
+        return []
 
     ranked = sorted(weekly_scores, key=lambda item: float(item[2]), reverse=True)[:12]
-
-    def format_score(score: float) -> str:
-        return str(int(score)) if float(score).is_integer() else f"{score:.2f}"
-
-    leaderboard: Dict[str, str] = {}
-    for team_name, scoring_period, score in ranked:
-        prefix = f"Week {scoring_period}" if scoring_period is not None else "Week ?"
-        leaderboard[team_name] = f"{prefix}: {format_score(score)}"
-
-    return leaderboard
+    return [
+        {
+            "Team": team_name,
+            "Week": f"Week {scoring_period}" if scoring_period is not None else "Week ?",
+            "Fpts": round(float(score), 2),
+        }
+        for team_name, scoring_period, score in ranked
+    ]
 
 
 def normalize_player_id(value: Any) -> str:
@@ -739,6 +912,7 @@ def build_cookie_header() -> str:
 def download_player_stats_df(league_id: str = DEFAULT_LEAGUE_ID, transaction_period: int = 22) -> pd.DataFrame:
     """Download the protected Fantrax player stats export and parse it into a dataframe."""
     load_env_file()
+    league_id = require_fantrax_league_id(league_id)
 
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
@@ -750,13 +924,15 @@ def download_player_stats_df(league_id: str = DEFAULT_LEAGUE_ID, transaction_per
     if cookie_header:
         headers["Cookie"] = cookie_header
 
+    season_or_projection = get_fantrax_player_stats_season_or_projection()
+
     response = requests.get(
         FANTRAX_PLAYER_STATS_URL,
         params={
             "leagueId": league_id,
             "pageNumber": 1,
             "statusOrTeamFilter": "ALL",
-            "seasonOrProjection": "SEASON_31n_BY_PERIOD",
+            "seasonOrProjection": season_or_projection,
             "timeframeTypeCode": "BY_PERIOD",
             "transactionPeriod": transaction_period,
             "timeStartType": "FROM_SEASON_START",
@@ -787,14 +963,16 @@ def get_player_stats_df(
     transaction_period: int = 22,
     force_refresh: bool = False,
 ) -> pd.DataFrame:
-    """Return cached player stats dataframe; download only once unless refresh is requested."""
+    """Return cached player stats dataframe; download once per league/period unless refresh is requested."""
     global _PLAYER_STATS_DF_CACHE
 
-    if _PLAYER_STATS_DF_CACHE is not None and not force_refresh:
-        return _PLAYER_STATS_DF_CACHE
+    league_id = require_fantrax_league_id(league_id)
+    cache_key = (league_id, int(max(1, transaction_period)))
+    if cache_key in _PLAYER_STATS_DF_CACHE and not force_refresh:
+        return _PLAYER_STATS_DF_CACHE[cache_key]
 
-    _PLAYER_STATS_DF_CACHE = download_player_stats_df(league_id=league_id, transaction_period=transaction_period)
-    return _PLAYER_STATS_DF_CACHE
+    _PLAYER_STATS_DF_CACHE[cache_key] = download_player_stats_df(league_id=league_id, transaction_period=transaction_period)
+    return _PLAYER_STATS_DF_CACHE[cache_key]
 
 
 def get_player_stats_by_id(
@@ -805,8 +983,10 @@ def get_player_stats_by_id(
     """Build and cache player stats by normalized Fantrax ID for fast lookups."""
     global _PLAYER_STATS_BY_ID_CACHE
 
-    if _PLAYER_STATS_BY_ID_CACHE is not None and not force_refresh:
-        return _PLAYER_STATS_BY_ID_CACHE
+    league_id = require_fantrax_league_id(league_id)
+    cache_key = (league_id, int(max(1, transaction_period)))
+    if cache_key in _PLAYER_STATS_BY_ID_CACHE and not force_refresh:
+        return _PLAYER_STATS_BY_ID_CACHE[cache_key]
 
     df = get_player_stats_df(
         league_id=league_id,
@@ -821,8 +1001,8 @@ def get_player_stats_by_id(
         if player_id:
             by_id[player_id] = row
 
-    _PLAYER_STATS_BY_ID_CACHE = by_id
-    return _PLAYER_STATS_BY_ID_CACHE
+    _PLAYER_STATS_BY_ID_CACHE[cache_key] = by_id
+    return _PLAYER_STATS_BY_ID_CACHE[cache_key]
 
 
 def load_calder_candidate_rows(path: Path) -> List[Dict[str, Any]]:
@@ -854,6 +1034,39 @@ def load_calder_candidate_rows(path: Path) -> List[Dict[str, Any]]:
             )
 
     return rows
+
+
+def apply_season_context_from_env() -> Dict[str, str]:
+    """If a season key is supplied, switch the active CSV inputs to that historical season."""
+    global INPUT_CSV_DIR, DRAFT_RESULTS_CSV, CALDER_CANDIDATES_CSV, FANTALYTICS_FRENZY_CSV
+
+    season_key = (os.getenv("SEASON_KEY", "") or "").strip()
+    if not season_key:
+        return {}
+
+    season_dir = PROJECT_ROOT / "trophy_input_csv" / season_key
+    if not season_dir.exists():
+        return {}
+
+    INPUT_CSV_DIR = season_dir
+    DRAFT_RESULTS_CSV = season_dir / "DraftResults.csv"
+    CALDER_CANDIDATES_CSV = season_dir / "CalderCandidates.csv"
+    FANTALYTICS_FRENZY_CSV = season_dir / "FantalyticsFrenzy.csv"
+
+    archive_config = load_archived_year_config(season_key)
+    if archive_config:
+        league_id = str(archive_config.get("league_id") or "").strip()
+        weeks_in_season = str(archive_config.get("weeks_in_season") or "").strip()
+        if league_id:
+            os.environ["FANTRAX_LEAGUE_ID"] = league_id
+        if weeks_in_season:
+            os.environ["WEEKS_IN_SEASON"] = weeks_in_season
+
+    return {
+        "season": season_key,
+        "league_id": os.getenv("FANTRAX_LEAGUE_ID", "").strip(),
+        "weeks_in_season": os.getenv("WEEKS_IN_SEASON", "").strip(),
+    }
 
 
 def get_appended_draft_rows() -> List[Dict[str, Any]]:
@@ -890,7 +1103,7 @@ def build_drafted_player_stats_json(
 ) -> Dict[str, Any]:
     """Build a player-level draft-class dataset that includes all drafted and kept players."""
     season_name = season_key or os.getenv("SEASON_KEY", "2026-2027").strip() or "2026-2027"
-    stats_by_id = player_stats_by_id or get_player_stats_by_id()
+    stats_by_id = player_stats_by_id if player_stats_by_id is not None else get_player_stats_by_id()
 
     rows: List[Dict[str, Any]] = []
     seen_player_ids: set[str] = set()
@@ -1027,7 +1240,7 @@ def get_hart_leaderboard(player_stats_by_id: Dict[str, Dict[str, Any]] | None = 
     if not draft_rows:
         return []
 
-    stats_by_id = player_stats_by_id or get_player_stats_by_id()
+    stats_by_id = player_stats_by_id if player_stats_by_id is not None else get_player_stats_by_id()
 
     hart_rows: List[Dict[str, Any]] = []
     for row in draft_rows:
@@ -1071,7 +1284,7 @@ def get_scouts_honor_leaderboard(player_stats_by_id: Dict[str, Dict[str, Any]] |
     if not draft_rows:
         return {}
 
-    stats_by_id = player_stats_by_id or get_player_stats_by_id()
+    stats_by_id = player_stats_by_id if player_stats_by_id is not None else get_player_stats_by_id()
 
     team_players: Dict[str, Dict[str, List[Dict[str, float]]]] = {}
     for row in draft_rows:
@@ -1111,7 +1324,7 @@ def get_calder_leaderboard(player_stats_by_id: Dict[str, Dict[str, Any]] | None 
     if not candidate_rows:
         return []
 
-    stats_by_id = player_stats_by_id or get_player_stats_by_id()
+    stats_by_id = player_stats_by_id if player_stats_by_id is not None else get_player_stats_by_id()
 
     leaderboard: List[Dict[str, Any]] = []
     for row in candidate_rows:
@@ -1256,6 +1469,7 @@ def get_backs_backe_back_to_back_leaderboard(
 ) -> Dict[str, str]:
     """Return the midpoint combined standings as team -> W-L-T mapping."""
     load_env_file()
+    league_id = require_fantrax_league_id(league_id)
     season_weeks = weeks_in_season if weeks_in_season is not None else get_weeks_in_season()
     period = max(1, math.ceil(float(season_weeks) / 2.0))
 
@@ -1321,6 +1535,100 @@ def get_backs_backe_back_to_back_leaderboard(
     return results
 
 
+def load_manual_assignments(season_key: str) -> Dict[str, List[Dict[str, Any]]]:
+    """Load the per-season manual award assignments from manual_assignments/<season>.csv."""
+    path = PROJECT_ROOT / "manual_assignments" / f"{season_key}.csv"
+    if not path.exists():
+        return {}
+
+    rows: Dict[str, List[Dict[str, Any]]] = {}
+    with path.open("r", encoding="utf-8", newline="") as handle:
+        reader = csv.DictReader(handle, delimiter=";")
+        for raw_row in reader:
+            if raw_row is None:
+                continue
+            item_name = normalize_fantrax_text(str(raw_row.get("Item") or raw_row.get("Award") or "")).strip()
+            if not item_name:
+                continue
+            winner = normalize_fantrax_text(str(raw_row.get("Winner") or "")).strip() or "Winner/Leader TBD"
+            player = normalize_fantrax_text(str(raw_row.get("Player") or "")).strip()
+            points_raw = raw_row.get("Points")
+            row: Dict[str, Any] = {
+                "Team": winner,
+                "Player": player,
+            }
+            if points_raw is not None and str(points_raw).strip() not in {"", "-", "--"}:
+                try:
+                    points_value = float(str(points_raw).strip().replace(",", ""))
+                    row["Points"] = points_value
+                    row["Fpts"] = points_value
+                    row["value"] = points_value
+                except (TypeError, ValueError):
+                    pass
+
+            rows[item_name] = [row]
+
+    return rows
+
+
+def get_manual_assignment_bucket_names() -> Dict[str, set[str]]:
+    """Map the expected JSON bucket names to the manual item names they can own."""
+    return {
+        "regseason_trophies": {
+            "hart",
+            "art ross",
+            "rocket richard",
+            "norris",
+            "selke",
+            "lady byng",
+            "jim gregory",
+            "vezina",
+            "calder",
+            "jack adams",
+        },
+        "regseason_awards": {
+            "scout's honor",
+            "fantalytic's frenzy",
+        },
+        "regseason_bounties": {
+            "it's vegas baby!",
+            "back's backe back-2-back",
+        },
+        "postseason_winners": {
+            "stanley cup",
+            "president's trophy",
+        },
+        "postseason_awards": {
+            "conn smythe",
+        },
+        "postseason_bounties": {
+            "the king is dead!",
+            "chasing the cup!",
+            "bitter looser or righteous winner!",
+        },
+        "postseason_achievements": {
+            "clarence s. campbell",
+            "prince of wales",
+            "orange lantern",
+        },
+        "shadowtrackers": {
+            "runner up",
+            "true president's trophy",
+            "fake president's trophy",
+        },
+    }
+
+
+def build_empty_matchup_data_json(season_key: str) -> Dict[str, Any]:
+    """Return a valid empty matchup payload for seasons with no league data."""
+    return {"season": {season_key: {"lastupdated": "", "matchups": {}}}}
+
+
+def build_empty_drafted_player_stats_json(season_key: str) -> Dict[str, Any]:
+    """Return a valid empty draft-class payload for seasons with no league data."""
+    return {"season": {season_key: {"lastupdated": "", "players": []}}}
+
+
 def buildSeasonTrophyJson(
     teams: Dict[str, Dict[str, Any]],
     period_leaderboard: Dict[str, float] | None = None,
@@ -1328,6 +1636,10 @@ def buildSeasonTrophyJson(
     standings_tables: Dict[str, pd.DataFrame] | None = None,
 ) -> Dict[str, Dict[str, Dict[str, float]]]:
     """Create the final season/trophy JSON with standings CSV-based overrides and legacy fallbacks."""
+    league_id = (league_id or "").strip()
+    has_league_data = has_fantrax_league_id(league_id)
+    if has_league_data:
+        league_id = require_fantrax_league_id(league_id)
 
     def ordinal_day(day: int) -> str:
         if 10 <= day % 100 <= 20:
@@ -1384,17 +1696,18 @@ def buildSeasonTrophyJson(
         ordered = sorted(dataset, key=lambda item: float(item["Value"]), reverse=descending)
         return {item["Team"]: round(float(item["Value"]), 2) for item in ordered}
 
-    custom_tables = standings_tables or download_standings_tables(league_id=league_id)
+    custom_tables = standings_tables or (download_standings_tables(league_id=league_id) if has_league_data else {})
     standings_df = custom_tables.get("Standings", pd.DataFrame())
     stats_df = custom_tables.get("Standings - Statistics - Skaters", pd.DataFrame())
     goals_df = custom_tables.get("Standings - Statistics - Goalies", pd.DataFrame())
     points_skater_df = custom_tables.get("Standings - Points - Skaters", pd.DataFrame())
     points_goalie_df = custom_tables.get("Standings - Points - Goalies", pd.DataFrame())
 
-    detailed_statistics = build_detailed_team_table(stats_df, goals_df)
-    detailed_points = build_detailed_team_table(points_skater_df, points_goalie_df)
-    custom_tables["Detailed Statistics Stats"] = detailed_statistics
-    custom_tables["Detailed Points Stats"] = detailed_points
+    detailed_statistics = build_detailed_team_table(stats_df, goals_df) if has_league_data else pd.DataFrame()
+    detailed_points = build_detailed_team_table(points_skater_df, points_goalie_df) if has_league_data else pd.DataFrame()
+    if has_league_data:
+        custom_tables["Detailed Statistics Stats"] = detailed_statistics
+        custom_tables["Detailed Points Stats"] = detailed_points
 
     trophy_map = {
         "Art Ross": ("score", True),
@@ -1445,65 +1758,187 @@ def buildSeasonTrophyJson(
     def placeholder_entry(value: str = "Winner/Leader TBD") -> Dict[str, int]:
         return {value: 99}
 
-    vegas_baby_leaderboard = get_vegas_baby_schedule_leaderboard(
-        league_id=league_id,
-        weeks_in_season=get_weeks_in_season(),
-    )
-    if not vegas_baby_leaderboard:
-        vegas_baby_leaderboard = {
-            team_name: f"Week ?: {score:.2f}" if isinstance(score, (int, float)) else f"Week ?: {score}"
-            for team_name, score in sorted((period_leaderboard or {}).items(), key=lambda item: float(item[1]), reverse=True)
-        }
+    vegas_baby_leaderboard = []
+    if has_league_data:
+        vegas_baby_leaderboard = get_vegas_baby_schedule_leaderboard(
+            league_id=league_id,
+            weeks_in_season=get_weeks_in_season(),
+        )
+    if not vegas_baby_leaderboard and period_leaderboard:
+        vegas_baby_leaderboard = [
+            {
+                "Team": team_name,
+                "Week": "Week ?",
+                "Fpts": round(float(score), 2) if isinstance(score, (int, float)) else float(score),
+            }
+            for team_name, score in sorted((period_leaderboard or {}).items(), key=lambda item: float(item[1]), reverse=True)[:12]
+        ]
 
     season_data: Dict[str, Any] = {}
-    season_key = "2026-2027"
+    season_key = os.getenv("SEASON_KEY", "2026-2027").strip() or "2026-2027"
+    manual_assignments = load_manual_assignments(season_key)
+    trophy_config = load_trophy_config()
 
-    player_stats_by_id = get_player_stats_by_id(league_id=league_id, transaction_period=get_weeks_in_season())
-    scout_honor_scores = get_scouts_honor_leaderboard(player_stats_by_id=player_stats_by_id)
+    def merge_manual_and_calculated(calculated: Dict[str, Any], allowed_manual_items: set[str]) -> Dict[str, Any]:
+        merged: Dict[str, Any] = {}
+        manual_override_keys: set[str] = set()
+        for item_name, value in manual_assignments.items():
+            normalized_item = normalize_tracker_item_name(item_name)
+            if normalized_item in allowed_manual_items and is_item_active_for_season(item_name, season_key, trophy_config):
+                merged[item_name] = value
+                manual_override_keys.add(normalized_item)
 
+        for item_name, value in calculated.items():
+            normalized_item = normalize_tracker_item_name(item_name)
+            if item_name in merged or normalized_item in manual_override_keys:
+                continue
+            if is_item_active_for_season(item_name, season_key, trophy_config):
+                merged[item_name] = value
+        return merged
+
+    player_stats_by_id = get_player_stats_by_id(league_id=league_id, transaction_period=get_weeks_in_season()) if has_league_data else {}
+    scout_honor_scores = get_scouts_honor_leaderboard(player_stats_by_id=player_stats_by_id) if has_league_data else {}
+
+    regular_season_trophies = {
+        "Hart": get_hart_leaderboard(player_stats_by_id=player_stats_by_id),
+        **build_trophy_bucket(),
+        "Calder": get_calder_leaderboard(player_stats_by_id=player_stats_by_id),
+        "Jack Adams": get_jack_adams_leaderboard(teams, scout_honor_scores),
+    } if has_league_data else {}
+    regular_season_awards = {
+        "Scout's honor": scout_honor_scores,
+        "Fantalytic's Frenzy": get_fantalytics_frenzy_leaderboard(teams),
+    } if has_league_data else {}
+    regular_season_bounties = {
+        "It's Vegas Baby!": vegas_baby_leaderboard,
+        "Back's Backe Back-2-Back": get_backs_backe_back_to_back_leaderboard(
+            league_id=league_id,
+            weeks_in_season=get_weeks_in_season(),
+        ),
+    } if has_league_data else {}
+    if has_league_data:
+        postseason_winners = {
+            "Stanley Cup": [{"Team": "Winner/Leader TBD", "Player": ""}],
+            "President's Trophy": [{"Team": "Winner/Leader TBD", "Player": ""}],
+        }
+        postseason_awards = {
+            "Conn Smythe": [{"Team": "Winner/Leader TBD", "Player": ""}],
+        }
+        postseason_bounties = {
+            "The King is Dead!": [{"Team": "Winner/Leader TBD", "Player": ""}],
+            "Chasing the Cup!": [{"Team": "Winner/Leader TBD", "Player": ""}],
+            "Bitter Looser or Righteous Winner!": [{"Team": "Winner/Leader TBD", "Player": ""}],
+        }
+        postseason_achievements = {
+            "Clarence S. Campbell": [{"Team": "Winner/Leader TBD", "Player": ""}],
+            "Prince of Wales": [{"Team": "Winner/Leader TBD", "Player": ""}],
+            "Orange Lantern": [{"Team": "Winner/Leader TBD", "Player": ""}],
+        }
+        shadow_trackers = {
+            "Runner Up": [{"Team": "Winner/Leader TBD", "Player": ""}],
+            "True President's Trophy": [{"Team": "Winner/Leader TBD", "Player": ""}],
+            "Fake President's Trophy": [{"Team": "Winner/Leader TBD", "Player": ""}],
+        }
+    else:
+        postseason_winners = {}
+        postseason_awards = {}
+        postseason_bounties = {}
+        postseason_achievements = {}
+        shadow_trackers = {}
+
+    manual_bucket_map = get_manual_assignment_bucket_names()
     season_data[season_key] = {
         "lastupdated": format_lastupdated(),
         "regseason": {
-            "trophies": {
-                "Hart": get_hart_leaderboard(player_stats_by_id=player_stats_by_id),
-                **build_trophy_bucket(),
-                "Calder": get_calder_leaderboard(player_stats_by_id=player_stats_by_id),
-                "Jack Adams": get_jack_adams_leaderboard(teams, scout_honor_scores),
-            },
-            "awards": {
-                "Scout's honor": scout_honor_scores,
-                "Fantalytic's Frenzy": get_fantalytics_frenzy_leaderboard(teams),
-            },
-            "bounties": {
-                "It's Vegas Baby!": vegas_baby_leaderboard,
-                "Back's Backe Back-2-Back": get_backs_backe_back_to_back_leaderboard(
-                    league_id=league_id,
-                    weeks_in_season=get_weeks_in_season(),
-                ),
-            },
+            "trophies": merge_manual_and_calculated(regular_season_trophies, manual_bucket_map["regseason_trophies"]),
+            "awards": merge_manual_and_calculated(regular_season_awards, manual_bucket_map["regseason_awards"]),
+            "bounties": merge_manual_and_calculated(regular_season_bounties, manual_bucket_map["regseason_bounties"]),
         },
         "postseason": {
-            "winners": {
-                "Stanley Cup": placeholder_entry(),
-                "President's Trophy": placeholder_entry(),
-            },
-            "awards": {
-                "Conn Smythe": placeholder_entry(),
-            },
-            "bounties": {
-                "The King is Dead!": placeholder_entry(),
-                "Chasing the Cup!": placeholder_entry(),
-                "Bitter Looser or Righteous Winner!": placeholder_entry(),
-            },
-            "achievements": {
-                "Clarence S. Campbell": placeholder_entry(),
-                "Prince of Wales": placeholder_entry(),
-                "Orange Lantern": placeholder_entry(),
-            },
+            "winners": merge_manual_and_calculated(postseason_winners, manual_bucket_map["postseason_winners"]),
+            "awards": merge_manual_and_calculated(postseason_awards, manual_bucket_map["postseason_awards"]),
+            "bounties": merge_manual_and_calculated(postseason_bounties, manual_bucket_map["postseason_bounties"]),
+            "achievements": merge_manual_and_calculated(postseason_achievements, manual_bucket_map["postseason_achievements"]),
         },
+        "shadowtrackers": merge_manual_and_calculated(shadow_trackers, manual_bucket_map["shadowtrackers"]),
     }
 
     return {"season": season_data}
+
+
+ARCHIVED_YEARS_DIR = PROJECT_ROOT / "archived_years"
+
+
+def load_archived_year_config(season_key: str) -> Dict[str, str]:
+    """Read the per-season config rows from archived_years/config.csv."""
+    config_path = ARCHIVED_YEARS_DIR / "config.csv"
+    if not config_path.exists():
+        return {}
+
+    with config_path.open("r", encoding="utf-8", newline="") as handle:
+        reader = csv.DictReader(handle, delimiter=";")
+        for row in reader:
+            if row is None:
+                continue
+            candidate = normalize_fantrax_text(str(row.get("season") or "")).strip()
+            if candidate and candidate == season_key:
+                return {
+                    "season": candidate,
+                    "league_id": str(row.get("league_id") or "").strip(),
+                    "weeks_in_season": str(row.get("weeks_in_season") or "").strip(),
+                }
+    return {}
+
+
+def append_archived_season_payloads(current_payload: Dict[str, Any], prefix: str) -> Dict[str, Any]:
+    """Merge all archived season JSONs for a payload type into the current payload."""
+    merged: Dict[str, Any] = {"season": {}}
+    archive_paths: List[Path] = []
+
+    if ARCHIVED_YEARS_DIR.exists():
+        for season_dir in sorted(ARCHIVED_YEARS_DIR.iterdir()):
+            if season_dir.is_dir():
+                archive_paths.extend(sorted(season_dir.glob(f"{prefix}-*.json")))
+
+        archive_paths.extend(sorted(ARCHIVED_YEARS_DIR.glob(f"{prefix}-*.json")))
+
+    seen_paths: set[str] = set()
+    for archive_path in archive_paths:
+        path_key = str(archive_path.resolve())
+        if path_key in seen_paths:
+            continue
+        seen_paths.add(path_key)
+
+        if archive_path.name == f"{prefix}-{os.getenv('SEASON_KEY', '').strip()}.json" and current_payload.get("season"):
+            continue
+        try:
+            with archive_path.open("r", encoding="utf-8") as handle:
+                archived_payload = json.load(handle)
+        except (json.JSONDecodeError, OSError):
+            continue
+        season_map = archived_payload.get("season") if isinstance(archived_payload, dict) else {}
+        if isinstance(season_map, dict):
+            merged["season"].update(season_map)
+
+    current_season_map = current_payload.get("season") if isinstance(current_payload, dict) else {}
+    if isinstance(current_season_map, dict):
+        merged["season"].update(current_season_map)
+
+    return merged
+
+
+def write_archived_season_payload(payload: Dict[str, Any], prefix: str, season_key: str) -> Path:
+    """Persist a single archive snapshot under archived_years/<season> for one season."""
+    if not season_key:
+        raise ValueError("season_key is required when writing an archived season payload.")
+
+    season_dir = ARCHIVED_YEARS_DIR / season_key
+    season_dir.mkdir(parents=True, exist_ok=True)
+    archive_path = season_dir / f"{prefix}-{season_key}.json"
+    with archive_path.open("w", encoding="utf-8") as handle:
+        json.dump(payload, handle, ensure_ascii=False, indent=2)
+        handle.write("\n")
+    return archive_path
 
 
 def load_env_file(path: str | None = None) -> Dict[str, str]:
@@ -1538,43 +1973,6 @@ def load_env_file(path: str | None = None) -> Dict[str, str]:
             os.environ.setdefault(key, value)
 
     return values
-
-
-def patch_jsonbin_trophies(payload: Dict[str, Any], env_path: str | None = None) -> Dict[str, Any]:
-    """Patch the configured JSONBin record using the env values or environment variables."""
-    load_env_file(env_path)
-
-    def get_value(key: str) -> str:
-        value = os.getenv(key, "")
-        return str(value).strip().strip('"\'')
-
-    bin_id = get_value("GHLTROPHYTRACKER_BIN_ID")
-    master_key = get_value("JSONBINIO_X_MASTER_KEY")
-    access_key = get_value("JSONBINIO_X_ACCESS_KEY")
-
-    if not bin_id:
-        raise ValueError("Missing GHLTROPHYTRACKER_BIN_ID in env values or environment.")
-
-    auth_key = master_key or access_key
-    if not auth_key:
-        raise ValueError("Missing JSONBINIO_X_MASTER_KEY or JSONBINIO_X_ACCESS_KEY in env values or environment.")
-
-    url = f"https://api.jsonbin.io/v3/b/{bin_id}"
-    headers = {
-        "Content-Type": "application/json",
-    }
-    if master_key:
-        headers["X-Master-Key"] = master_key
-    if access_key:
-        headers["X-Access-Key"] = access_key
-
-    response = requests.put(url, headers=headers, json=payload, timeout=30)
-    if response.status_code in (401, 403, 404):
-        raise PermissionError(
-            f"JSONBin rejected the request for bin '{bin_id}'. Check that the bin id, X-Master-Key, or X-Access-Key are valid and that the bin is private."
-        )
-    response.raise_for_status()
-    return response.json()
 
 
 def patch_cloudflare_kv_value(namespace_id: str, key: str, payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -1653,31 +2051,57 @@ def publish_cloudflare_kv_snapshots(
 
 if __name__ == "__main__":
     load_env_file()
-    league_id = os.getenv("FANTRAX_LEAGUE_ID", DEFAULT_LEAGUE_ID)
+    apply_season_context_from_env()
+    season_key = os.getenv("SEASON_KEY", "2026-2027").strip() or "2026-2027"
+    league_id = os.getenv("FANTRAX_LEAGUE_ID", "").strip()
     season_weeks = get_weeks_in_season()
-    standings_tables = download_standings_tables(league_id=league_id, weeks_in_season=season_weeks)
-    results = getMatchupScores(league_id=league_id, reg_season_periods=season_weeks)
-    vegas_baby_board = get_vegas_baby_schedule_leaderboard(league_id=league_id, weeks_in_season=season_weeks)
-    final_json = buildSeasonTrophyJson(
-        results,
-        period_leaderboard=vegas_baby_board,
-        league_id=league_id,
-        standings_tables=standings_tables,
-    )
-    matchup_json = build_matchup_data_json(league_id=league_id, weeks_in_season=season_weeks, season_key="2026-2027")
-    draft_class_json = build_drafted_player_stats_json(
-        season_key="2026-2027",
-        player_stats_by_id=get_player_stats_by_id(league_id=league_id, transaction_period=season_weeks),
-    )
 
+    if has_fantrax_league_id(league_id):
+        league_id = require_fantrax_league_id(league_id).strip()
+        standings_tables = download_standings_tables(league_id=league_id, weeks_in_season=season_weeks)
+        results = getMatchupScores(league_id=league_id, reg_season_periods=season_weeks)
+        vegas_baby_board = get_vegas_baby_schedule_leaderboard(league_id=league_id, weeks_in_season=season_weeks)
+        final_json = buildSeasonTrophyJson(
+            results,
+            period_leaderboard=vegas_baby_board,
+            league_id=league_id,
+            standings_tables=standings_tables,
+        )
+        matchup_json = build_matchup_data_json(league_id=league_id, weeks_in_season=season_weeks, season_key=season_key)
+        draft_class_json = build_drafted_player_stats_json(
+            season_key=season_key,
+            player_stats_by_id=get_player_stats_by_id(league_id=league_id, transaction_period=season_weeks),
+        )
+    else:
+        final_json = buildSeasonTrophyJson({}, period_leaderboard=None, league_id="", standings_tables={})
+        matchup_json = build_empty_matchup_data_json(season_key)
+        draft_class_json = build_empty_drafted_player_stats_json(season_key)
+
+    should_write_archived_jsons = os.getenv("WRITE_ARCHIVED_JSONS", "0").strip().lower() in {"1", "true", "yes", "on"}
     should_publish_cloudflare_kv = os.getenv("PUBLISH_TO_CLOUDFLARE_KV", "0").strip().lower() in {"1", "true", "yes", "on"}
 
-    # print(json.dumps(final_json, ensure_ascii=False, indent=2))
-    # print(json.dumps(matchup_json, ensure_ascii=False, indent=2))
-    # should_publish_cloudflare_kv = False
-    should_publish_cloudflare_kv = True
+    if should_write_archived_jsons:
+        write_archived_season_payload(final_json, "trophy-data", season_key)
+        write_archived_season_payload(matchup_json, "matchup-data", season_key)
+        write_archived_season_payload(draft_class_json, "drafted-player-stats", season_key)
+        print(json.dumps({
+            "mode": "archive_only",
+            "season": season_key,
+            "archives": [
+                str((ARCHIVED_YEARS_DIR / season_key / f"trophy-data-{season_key}.json").resolve()),
+                str((ARCHIVED_YEARS_DIR / season_key / f"matchup-data-{season_key}.json").resolve()),
+                str((ARCHIVED_YEARS_DIR / season_key / f"drafted-player-stats-{season_key}.json").resolve()),
+            ],
+        }, ensure_ascii=False, indent=2))
+        raise SystemExit(0)
 
     if should_publish_cloudflare_kv:
         cloudflare_result = publish_cloudflare_kv_snapshots(final_json, matchup_json, draft_class_json)
         print(json.dumps({"cloudflare_kv": cloudflare_result}, ensure_ascii=False, indent=2))
+        raise SystemExit(0)
+
+    print(json.dumps({
+        "mode": "no-op",
+        "message": "No output mode selected. Set WRITE_ARCHIVED_JSONS=1 or PUBLISH_TO_CLOUDFLARE_KV=1.",
+    }, ensure_ascii=False, indent=2))
 
