@@ -84,7 +84,13 @@ body {
   border-radius: 14px;
   background: linear-gradient(135deg, rgba(125, 182, 255, 0.22), rgba(116, 174, 247, 0.1));
   border: 1px solid rgba(125, 182, 255, 0.25);
-  font-size: 2.1rem;
+  overflow: hidden;
+}
+
+.brand-logo {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
 }
 
 .topbar-copy {
@@ -1304,7 +1310,6 @@ select {
   .brand-mark {
     width: 56px;
     height: 56px;
-    font-size: 1.8rem;
   }
 
   .topbar-title {
