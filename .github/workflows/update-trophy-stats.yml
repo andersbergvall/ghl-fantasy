@@ -3,7 +3,7 @@ name: Update Trophy Stats
 on:
   workflow_dispatch:
   schedule:
-    - cron: "49 1 * * *"
+    - cron: "49 4 * * *"
       timezone: "Europe/Stockholm"
 
 jobs:
