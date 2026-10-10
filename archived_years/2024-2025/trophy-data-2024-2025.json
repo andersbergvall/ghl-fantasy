@@ -1,7 +1,7 @@
 {
   "season": {
     "2024-2025": {
-      "lastupdated": "October 9th 2026, 22:13",
+      "lastupdated": "October 10th 2026, 12:59",
       "regseason": {
         "trophies": {
           "Hart": [
@@ -166,7 +166,7 @@
           },
           "Calder": [
             {
-              "Team": "Taipei 101s",
+              "Team": "Taipei 101's",
               "Player Name": "Kirill Marchenko",
               "Fpts": 228.8
             },
@@ -201,7 +201,7 @@
               "Fpts": 123.55
             },
             {
-              "Team": "Östermalm Golden Bananas",
+              "Team": "Ömalm Golden Bananas",
               "Player Name": "Stuart Skinner",
               "Fpts": 118.1
             },
@@ -219,8 +219,8 @@
           "Jack Adams": {
             "Tuna Tacos": 398.78,
             "Västermalm Frogs": 296.0,
-            "Taipei 101's": 294.85,
-            "Ömalm Golden Bananas": 187.04,
+            "Ömalm Golden Bananas": 172.53,
+            "Taipei 101's": 158.75,
             "Bangkok Ladyboys": 117.89,
             "Bönan Bonebreakers": 106.66,
             "Warszawa White Russians": 77.9,
@@ -242,17 +242,15 @@
             "Warszawa White Russians": 3394.9,
             "Bönan Bonebreakers": 3330.29,
             "Wan Chai Oysters": 3301.93,
+            "Taipei 101's": 3300.87,
             "Rinkeby Runners": 3281.14,
             "Gävle Raiders": 3233.63,
             "Hagaström Hellraisers": 3215.11,
-            "Taipei 101's": 3164.77,
             "Tuna Tacos": 3114.26,
-            "Ömalm Golden Bananas": 3074.39,
+            "Ömalm Golden Bananas": 3088.9,
             "Valhalla Valkyries": 3051.36,
             "Bangkok Ladyboys": 2990.01,
-            "Västermalm Frogs": 2855.48,
-            "Taipei 101s": 228.8,
-            "Östermalm Golden Bananas": 118.1
+            "Västermalm Frogs": 2855.48
           }
         },
         "bounties": {

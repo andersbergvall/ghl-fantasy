@@ -1,7 +1,7 @@
 {
   "season": {
     "2023-2024": {
-      "lastupdated": "October 9th 2026, 22:13",
+      "lastupdated": "October 10th 2026, 12:58",
       "regseason": {
         "trophies": {
           "Norris": [
@@ -149,7 +149,7 @@
               "Fpts": 243.65
             },
             {
-              "Team": "Östermalm Golden Bananas",
+              "Team": "Ömalm Golden Bananas",
               "Player Name": "Thatcher Demko",
               "Fpts": 209.05
             },
@@ -179,7 +179,7 @@
               "Fpts": 148.2
             },
             {
-              "Team": "Taipei 101s",
+              "Team": "Taipei 101's",
               "Player Name": "Bowen Byram",
               "Fpts": 104.42
             },
@@ -205,10 +205,10 @@
             }
           ],
           "Jack Adams": {
-            "Ömalm Golden Bananas": 475.47,
             "Tuna Tacos": 367.8,
             "Taipei 101's": 358.04,
             "Warszawa White Russians": 311.45,
+            "Ömalm Golden Bananas": 266.42,
             "Bönan Bonebreakers": 266.38,
             "Wan Chai Oysters": 188.36,
             "Bangkok Ladyboys": 132.31,
@@ -227,10 +227,10 @@
             }
           ],
           "Scout's honor": {
+            "Ömalm Golden Bananas": 3596.5,
             "Bangkok Ladyboys": 3569.72,
             "Västermalm Frogs": 3448.13,
             "Rinkeby Runners": 3447.88,
-            "Ömalm Golden Bananas": 3387.45,
             "Hagaström Hellraisers": 3356.76,
             "Gävle Raiders": 3276.04,
             "Bönan Bonebreakers": 3273.72,
@@ -238,9 +238,7 @@
             "Taipei 101's": 3164.71,
             "Wan Chai Oysters": 3153.31,
             "Tuna Tacos": 2929.22,
-            "Warszawa White Russians": 2674.19,
-            "Östermalm Golden Bananas": 209.05,
-            "Taipei 101s": 104.42
+            "Warszawa White Russians": 2674.19
           }
         },
         "bounties": {
