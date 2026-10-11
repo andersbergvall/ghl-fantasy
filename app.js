@@ -117,14 +117,16 @@ let matchupSortDirection = "desc";
 let draftClassSortKey = "PICK";
 let draftClassSortDirection = "asc";
 let draftClassPageIndex = 0;
-let draftClassRoundFilter = "ALL";
+let draftClassRoundFilter = new Set();
 let draftClassPositionFilter = "ALL";
-let draftClassFantasyTeamFilter = "ALL";
+let draftClassFantasyTeamFilter = new Set();
 let draftClassNhlTeamFilter = "ALL";
 let activeTopBoardTab = "leaderboard";
 let matchupTableScrollLeft = 0;
 let draftClassTableScrollLeft = 0;
 let matchupScrollRestoreTimers = [];
+let draftOpenMultiFilter = null;
+let draftOutsideClickHandlerBound = false;
 
 function clearMatchupScrollRestoreTimers() {
   matchupScrollRestoreTimers.forEach((timerId) => window.clearTimeout(timerId));
@@ -662,19 +664,61 @@ function getDraftClassPositionBucket(position) {
   return "F";
 }
 
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function getFilteredSelection(selectedSet, allowedValues) {
+  return new Set([...selectedSet].filter((value) => allowedValues.includes(value)));
+}
+
+function renderDraftCheckboxDropdown({
+  filterType,
+  selectedSet,
+  options,
+  triggerLabel,
+}) {
+  const optionRows = options
+    .map((option) => {
+      const checked = selectedSet.has(option.value) ? "checked" : "";
+      return `
+        <label class="draft-multi-option">
+          <input type="checkbox" data-multi-option="${filterType}" value="${escapeHtml(option.value)}" ${checked} />
+          <span>${escapeHtml(option.label)}</span>
+        </label>
+      `;
+    })
+    .join("");
+
+  return `
+    <details class="draft-multi-select" data-multi-filter="${filterType}" ${draftOpenMultiFilter === filterType ? "open" : ""}>
+      <summary class="draft-multi-summary">${escapeHtml(triggerLabel)}</summary>
+      <div class="draft-multi-menu">
+        ${optionRows}
+        <button class="draft-multi-clear" type="button" data-multi-clear="${filterType}">Clear All</button>
+      </div>
+    </details>
+  `;
+}
+
 function getDraftClassFilteredRows(seasonKey) {
   const rows = getDraftClassRows(seasonKey);
 
   return rows.filter((row) => {
     const roundValue = String(row?.ROUND || row?.Round || "").trim();
-    const roundMatch = draftClassRoundFilter === "ALL" || roundValue === draftClassRoundFilter;
+    const roundMatch = !draftClassRoundFilter.size || draftClassRoundFilter.has(roundValue);
 
     const positionValue = String(row?.POS || "").trim().toUpperCase();
     const positionBucket = getDraftClassPositionBucket(positionValue);
     const positionMatch = draftClassPositionFilter === "ALL" || positionBucket === draftClassPositionFilter;
 
     const fantasyTeamValue = String(row?.["Fantasy Team"] || "").trim();
-    const fantasyTeamMatch = draftClassFantasyTeamFilter === "ALL" || fantasyTeamValue === draftClassFantasyTeamFilter;
+    const fantasyTeamMatch = !draftClassFantasyTeamFilter.size || draftClassFantasyTeamFilter.has(fantasyTeamValue);
 
     const nhlTeamValue = String(row?.NHLTEAM || row?.TEAM || row?.["Team"] || "").trim();
     const nhlTeamMatch = draftClassNhlTeamFilter === "ALL" || nhlTeamValue === draftClassNhlTeamFilter;
@@ -760,17 +804,20 @@ function renderDraftClassBoard(seasonKey) {
   const endIndex = Math.min(startIndex + pageSize, draftRows.length);
   const pageRows = draftRows.slice(startIndex, endIndex);
 
-  const roundOptions = ["ALL", ...Array.from({ length: 21 }, (_, index) => `R${index + 1}`), "K"]
-    .map((roundKey) => `<option value="${roundKey}" ${draftClassRoundFilter === roundKey ? "selected" : ""}>${roundKey === "ALL" ? "All" : roundKey}</option>`)
-    .join("");
+  const roundOptions = [...Array.from({ length: 21 }, (_, index) => `R${index + 1}`), "K"]
+    .map((roundKey) => ({ value: roundKey, label: roundKey }));
+  draftClassRoundFilter = getFilteredSelection(draftClassRoundFilter, roundOptions.map((option) => option.value));
 
   const positionOptions = ["ALL", "D", "G", "F"]
     .map((positionKey) => `<option value="${positionKey}" ${draftClassPositionFilter === positionKey ? "selected" : ""}>${positionKey === "ALL" ? "All" : positionKey}</option>`)
     .join("");
 
-  const fantasyTeamOptions = ["ALL", ...Array.from(new Set(getDraftClassRows(seasonKey).map((row) => String(row?.["Fantasy Team"] || "").trim()).filter(Boolean))).sort((left, right) => left.localeCompare(right))]
-    .map((teamKey) => `<option value="${teamKey}" ${draftClassFantasyTeamFilter === teamKey ? "selected" : ""}>${teamKey === "ALL" ? "All Teams" : teamKey}</option>`)
-    .join("");
+  const fantasyTeamOptions = Array.from(new Set(getDraftClassRows(seasonKey)
+    .map((row) => String(row?.["Fantasy Team"] || "").trim())
+    .filter(Boolean)))
+    .sort((left, right) => left.localeCompare(right))
+    .map((teamKey) => ({ value: teamKey, label: teamKey }));
+  draftClassFantasyTeamFilter = getFilteredSelection(draftClassFantasyTeamFilter, fantasyTeamOptions.map((option) => option.value));
 
   const nhlTeamOptions = ["ALL", ...Array.from(new Set(getDraftClassRows(seasonKey).map((row) => String(row?.NHLTEAM || row?.TEAM || row?.["Team"] || "").trim()).filter(Boolean))).sort((left, right) => left.localeCompare(right))]
     .map((teamKey) => `<option value="${teamKey}" ${draftClassNhlTeamFilter === teamKey ? "selected" : ""}>${teamKey === "ALL" ? "All NHL Teams" : teamKey}</option>`)
@@ -820,10 +867,13 @@ function renderDraftClassBoard(seasonKey) {
       <div class="draft-class-toolbar">
         <div class="draft-class-filter-group">
           <label class="draft-class-select-wrap">
-            <span class="filter-group-label">RD</span>
-            <select class="draft-class-select" data-round-filter>
-              ${roundOptions}
-            </select>
+            <span class="filter-group-label">ROUND</span>
+            ${renderDraftCheckboxDropdown({
+              filterType: "round",
+              selectedSet: draftClassRoundFilter,
+              options: roundOptions,
+              triggerLabel: "Select",
+            })}
           </label>
         </div>
         <div class="draft-class-filter-group">
@@ -838,9 +888,12 @@ function renderDraftClassBoard(seasonKey) {
           <div class="draft-class-team-filter-row">
             <label class="draft-class-select-wrap">
               <span class="filter-group-label">Fantasy Team</span>
-              <select class="draft-class-select" data-team-filter>
-                ${fantasyTeamOptions}
-              </select>
+              ${renderDraftCheckboxDropdown({
+                filterType: "team",
+                selectedSet: draftClassFantasyTeamFilter,
+                options: fantasyTeamOptions,
+                triggerLabel: "Select",
+              })}
             </label>
             <label class="draft-class-select-wrap">
               <span class="filter-group-label">NHL Team</span>
@@ -873,23 +926,85 @@ function renderDraftClassBoard(seasonKey) {
     });
   }
 
-  draftClassPane.querySelector("[data-round-filter]")?.addEventListener("change", (event) => {
-    draftClassRoundFilter = event.target.value || "ALL";
-    draftClassPageIndex = 0;
-    renderDraftClassBoard(seasonKey);
-  });
-
   draftClassPane.querySelector("[data-position-filter]")?.addEventListener("change", (event) => {
     draftClassPositionFilter = event.target.value || "ALL";
     draftClassPageIndex = 0;
     renderDraftClassBoard(seasonKey);
   });
 
-  draftClassPane.querySelector("[data-team-filter]")?.addEventListener("change", (event) => {
-    draftClassFantasyTeamFilter = event.target.value || "ALL";
-    draftClassPageIndex = 0;
-    renderDraftClassBoard(seasonKey);
+  draftClassPane.querySelectorAll(".draft-multi-select")?.forEach((detailsElement) => {
+    detailsElement.addEventListener("toggle", () => {
+      const filterType = detailsElement.getAttribute("data-multi-filter");
+      if (detailsElement.open) {
+        draftOpenMultiFilter = filterType;
+        draftClassPane.querySelectorAll(".draft-multi-select").forEach((otherElement) => {
+          if (otherElement !== detailsElement) {
+            otherElement.open = false;
+          }
+        });
+      } else if (draftOpenMultiFilter === filterType) {
+        draftOpenMultiFilter = null;
+      }
+    });
   });
+
+  draftClassPane.querySelectorAll("[data-multi-option='round']")?.forEach((input) => {
+    input.addEventListener("change", () => {
+      const selectedValues = Array.from(draftClassPane.querySelectorAll("[data-multi-option='round']:checked"))
+        .map((checkbox) => checkbox.value);
+      draftClassRoundFilter = new Set(selectedValues);
+      draftOpenMultiFilter = "round";
+      draftClassPageIndex = 0;
+      renderDraftClassBoard(seasonKey);
+    });
+  });
+
+  draftClassPane.querySelectorAll("[data-multi-option='team']")?.forEach((input) => {
+    input.addEventListener("change", () => {
+      const selectedValues = Array.from(draftClassPane.querySelectorAll("[data-multi-option='team']:checked"))
+        .map((checkbox) => checkbox.value);
+      draftClassFantasyTeamFilter = new Set(selectedValues);
+      draftOpenMultiFilter = "team";
+      draftClassPageIndex = 0;
+      renderDraftClassBoard(seasonKey);
+    });
+  });
+
+  draftClassPane.querySelectorAll("[data-multi-clear]")?.forEach((button) => {
+    button.addEventListener("click", (event) => {
+      event.preventDefault();
+      const filterType = button.getAttribute("data-multi-clear");
+      if (filterType === "round") {
+        draftClassRoundFilter = new Set();
+      }
+      if (filterType === "team") {
+        draftClassFantasyTeamFilter = new Set();
+      }
+      draftOpenMultiFilter = filterType;
+      draftClassPageIndex = 0;
+      renderDraftClassBoard(seasonKey);
+    });
+  });
+
+  if (!draftOutsideClickHandlerBound) {
+    document.addEventListener("click", (event) => {
+      if (!draftClassPane || draftClassPane.hidden) {
+        return;
+      }
+      if (!(event.target instanceof Element)) {
+        return;
+      }
+      if (event.target.closest(".draft-multi-select")) {
+        return;
+      }
+
+      draftOpenMultiFilter = null;
+      draftClassPane.querySelectorAll(".draft-multi-select[open]").forEach((detailsElement) => {
+        detailsElement.open = false;
+      });
+    });
+    draftOutsideClickHandlerBound = true;
+  }
 
   draftClassPane.querySelector("[data-nhlteam-filter]")?.addEventListener("change", (event) => {
     draftClassNhlTeamFilter = event.target.value || "ALL";

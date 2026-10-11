@@ -5,14 +5,17 @@
   --panel: rgba(18, 26, 39, 0.88);
   --panel-strong: #111a2b;
   --line: rgba(148, 163, 184, 0.18);
-  --text: #e5eefb;
-  --muted: #97a9c2;
-  --ice: #a7d3ff;
-  --ice-deep: #74aef7;
-  --sweater: #edf6ff;
+  --text: #d3e8ff;
+  --muted: #8aa7cb;
+  --ice: #8fd3ff;
+  --ice-deep: #63b7ff;
+  --sweater: #e6f2ff;
+  --table-text: #c8ddf8;
+  --table-head: #e1f0ff;
+  --timestamp-text: #6bd3ff;
   --shadow: 0 20px 40px rgba(3, 7, 18, 0.42);
-  --accent: #7db6ff;
-  --accent-soft: rgba(125, 182, 255, 0.18);
+  --accent: #6fc4ff;
+  --accent-soft: rgba(111, 196, 255, 0.22);
   --gold: #f4c35f;
   --silver: #c4d0dd;
   --red: #ff7b7b;
@@ -128,6 +131,7 @@ h2 {
   color: var(--sweater);
   font-weight: 800;
   line-height: 1.05;
+  text-shadow: 0 0 14px rgba(111, 196, 255, 0.18);
 }
 
 .topbar-subtitle {
@@ -246,6 +250,7 @@ select {
   color: var(--text);
   border-color: rgba(125, 182, 255, 0.42);
   background: rgba(125, 182, 255, 0.16);
+  text-shadow: 0 0 10px rgba(111, 196, 255, 0.22);
 }
 
 .top-board-pane[hidden] {
@@ -273,6 +278,8 @@ select {
   border-collapse: separate;
   border-spacing: 0;
   table-layout: fixed;
+  font-family: "Segoe UI", "Inter", "Helvetica Neue", Arial, sans-serif;
+  font-weight: 500;
 }
 
 .bingo-board-table th,
@@ -353,7 +360,7 @@ select {
   max-width: 120px;
   width: 120px;
   text-align: left !important;
-  font-weight: 600;
+  font-weight: 500;
   color: var(--sweater);
   background: rgba(17, 26, 43, 0.72);
   font-size: 0.54rem;
@@ -438,7 +445,7 @@ select {
 }
 
 .updated-text {
-  color: #6bd3ff;
+  color: var(--timestamp-text);
   font-size: 0.76rem;
   font-weight: 600;
   line-height: 1.1;
@@ -669,6 +676,74 @@ select {
   width: 100%;
 }
 
+.draft-multi-select {
+  position: relative;
+  width: 100%;
+}
+
+.draft-multi-summary {
+  list-style: none;
+  cursor: pointer;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  background: rgba(15, 21, 32, 0.9);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 0.72rem;
+  min-width: 100px;
+  width: 100%;
+  user-select: none;
+}
+
+.draft-multi-summary::-webkit-details-marker {
+  display: none;
+}
+
+.draft-multi-select[open] .draft-multi-summary {
+  border-color: rgba(125, 182, 255, 0.45);
+  box-shadow: 0 0 0 2px rgba(125, 182, 255, 0.18);
+}
+
+.draft-multi-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  z-index: 30;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  background: rgba(8, 12, 20, 0.98);
+  border-radius: 10px;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  box-shadow: 0 12px 28px rgba(2, 6, 14, 0.6);
+}
+
+.draft-multi-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.74rem;
+  color: var(--text);
+}
+
+.draft-multi-option input {
+  margin: 0;
+}
+
+.draft-multi-clear {
+  margin-top: 4px;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  background: rgba(148, 163, 184, 0.1);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 6px 8px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
 .draft-class-team-group {
   min-width: 260px;
 }
@@ -750,7 +825,7 @@ select {
   width: 100%;
   border-collapse: collapse;
   min-width: 900px;
-  font-family: "Inter", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  font-family: "Segoe UI", "Inter", "Helvetica Neue", Arial, sans-serif;
   font-variant-numeric: tabular-nums;
   font-feature-settings: "tnum" 1, "lnum" 1;
   font-size: 0.68rem;
@@ -770,11 +845,12 @@ select {
   background: linear-gradient(180deg, rgba(14, 22, 34, 0.98), rgba(9, 13, 21, 0.98));
   backdrop-filter: blur(6px);
   box-shadow: inset 0 -1px 0 rgba(148, 163, 184, 0.12);
-  color: var(--sweater);
+  color: var(--table-head);
   font-size: 0.62rem;
-  font-weight: 800;
+  font-weight: 500;
   letter-spacing: 0.12em;
   text-transform: uppercase;
+  text-shadow: 0 0 8px rgba(111, 196, 255, 0.2);
 }
 
 .matchup-table thead th:first-child,
@@ -783,6 +859,7 @@ select {
   left: 0;
   z-index: 4;
   background: rgba(9, 13, 21, 0.96);
+  color: var(--timestamp-text);
 }
 
 .draft-class-table thead th:nth-child(1),
@@ -794,6 +871,7 @@ select {
   position: sticky;
   z-index: 3;
   background: rgba(9, 13, 21, 0.96);
+  color: var(--timestamp-text);
 }
 
 .draft-class-table thead th:nth-child(1),
@@ -817,7 +895,7 @@ select {
   padding: 4px 6px;
   font-size: 0.68rem;
   white-space: nowrap;
-  color: var(--text);
+  color: var(--table-text);
 }
 
 .draft-class-table th,
@@ -825,14 +903,14 @@ select {
   width: auto;
   padding-left: 5px;
   padding-right: 5px;
-  font-weight: 600;
-  color: var(--text);
+  font-weight: 500;
+  color: var(--table-text);
 }
 
 .matchup-table td {
-  color: var(--text);
+  color: var(--table-text);
   letter-spacing: 0.01em;
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .matchup-sort {
@@ -845,7 +923,7 @@ select {
   background: transparent;
   color: var(--muted);
   font-size: 0.6rem;
-  font-weight: 800;
+  font-weight: 500;
   letter-spacing: 0.12em;
   text-transform: uppercase;
   text-align: left;
@@ -865,7 +943,7 @@ select {
 .table-highlight,
 .table-highlight-header {
   color: var(--text-accent);
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .matchup-sort-indicator {
