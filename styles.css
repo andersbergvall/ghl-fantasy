@@ -180,7 +180,9 @@ h2 {
 }
 
 .season-select option {
-  color: #0b1020;
+  background: rgba(8, 12, 20, 0.98);
+  color: var(--muted);
+  font-size: 0.84rem;
 }
 
 .season-select-arrow {
@@ -746,7 +748,7 @@ select {
 .draft-class-toolbar {
   display: flex;
   flex-wrap: wrap;
-  gap: 3px;
+  gap: 4px;
   align-items: flex-start;
   margin-bottom: 8px;
 }
@@ -762,7 +764,7 @@ select {
 .draft-class-team-filter-row {
   display: flex;
   align-items: flex-end;
-  gap: 3px;
+  gap: 4px;
 }
 
 .draft-class-vabo-note {
@@ -794,23 +796,14 @@ select {
   min-width: 150px;
 }
 
+.draft-class-toolbar > .draft-class-filter-group:not(.draft-class-team-group) {
+  width: 64px;
+  min-width: 64px;
+  flex: 0 0 64px;
+}
+
 .draft-class-toolbar > .draft-class-filter-group:not(.draft-class-team-group) .draft-class-select-wrap,
 .draft-class-toolbar > .draft-class-filter-group:not(.draft-class-team-group) .draft-multi-select {
-  width: 60px;
-  min-width: 60px;
-}
-
-.draft-class-toolbar > .draft-round-filter-group,
-.draft-class-toolbar > .draft-position-filter-group {
-  width: 56px;
-  min-width: 56px;
-  flex: 0 0 56px;
-}
-
-.draft-class-toolbar > .draft-round-filter-group .draft-class-select-wrap,
-.draft-class-toolbar > .draft-position-filter-group .draft-class-select-wrap,
-.draft-class-toolbar > .draft-round-filter-group .draft-multi-select,
-.draft-class-toolbar > .draft-position-filter-group .draft-multi-select {
   width: 100%;
   min-width: 0;
 }
@@ -841,6 +834,7 @@ select {
 .draft-class-select {
   appearance: none;
   -webkit-appearance: none;
+  box-sizing: border-box;
   border: 1px solid rgba(148, 163, 184, 0.18);
   background: rgba(15, 21, 32, 0.9);
   color: var(--text);
@@ -854,6 +848,7 @@ select {
 .draft-multi-select {
   position: relative;
   width: 100%;
+  box-sizing: border-box;
   padding-top: 0;
 }
 
@@ -864,6 +859,7 @@ select {
 .draft-multi-summary {
   list-style: none;
   cursor: pointer;
+  box-sizing: border-box;
   border: 1px solid rgba(148, 163, 184, 0.18);
   background: rgba(15, 21, 32, 0.9);
   color: var(--text);
@@ -912,15 +908,29 @@ select {
   align-items: center;
   gap: 8px;
   font-size: 0.56rem;
-  color: var(--text);
+  color: var(--muted);
 }
 
 .draft-class-team-group .draft-multi-select[data-multi-filter="team"] .draft-multi-option span {
   white-space: nowrap;
 }
 
-.draft-multi-option input {
+.draft-multi-option input[type="checkbox"] {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 11px;
+  height: 11px;
+  border-radius: 2px;
+  border: 1px solid rgba(23, 31, 45, 0.95);
+  background: rgba(8, 12, 20, 0.98);
+  display: inline-grid;
+  place-content: center;
   margin: 0;
+}
+
+.draft-multi-option input[type="checkbox"]:checked {
+  background: var(--accent);
+  border-color: var(--ice-deep);
 }
 
 .draft-multi-clear {
@@ -947,7 +957,7 @@ select {
 .draft-class-team-filter-row {
   display: flex;
   align-items: flex-end;
-  gap: 3px;
+  gap: 4px;
   width: 100%;
 }
 
@@ -1732,28 +1742,19 @@ select {
   .draft-class-toolbar {
     flex-wrap: wrap;
     align-items: flex-start;
-    gap: 3px;
+    gap: 4px;
     overflow: visible;
     padding-bottom: 0;
   }
 
+  .draft-class-toolbar > .draft-class-filter-group:not(.draft-class-team-group) {
+    width: 64px;
+    min-width: 64px;
+    flex: 0 0 64px;
+  }
+
   .draft-class-toolbar > .draft-class-filter-group:not(.draft-class-team-group) .draft-class-select-wrap,
   .draft-class-toolbar > .draft-class-filter-group:not(.draft-class-team-group) .draft-multi-select {
-    width: 60px;
-    min-width: 60px;
-  }
-
-  .draft-class-toolbar > .draft-round-filter-group,
-  .draft-class-toolbar > .draft-position-filter-group {
-    width: 52px;
-    min-width: 52px;
-    flex: 0 0 52px;
-  }
-
-  .draft-class-toolbar > .draft-round-filter-group .draft-class-select-wrap,
-  .draft-class-toolbar > .draft-position-filter-group .draft-class-select-wrap,
-  .draft-class-toolbar > .draft-round-filter-group .draft-multi-select,
-  .draft-class-toolbar > .draft-position-filter-group .draft-multi-select {
     width: 100%;
     min-width: 0;
   }
