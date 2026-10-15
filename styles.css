@@ -246,6 +246,14 @@ select {
   cursor: pointer;
 }
 
+.top-board-tab-icon {
+  display: none;
+}
+
+.top-board-tab-label {
+  display: inline;
+}
+
 .top-board-tab.is-active {
   color: var(--text);
   border-color: rgba(125, 182, 255, 0.42);
@@ -904,6 +912,24 @@ select {
   color: var(--timestamp-text);
 }
 
+.fa-snipes-table thead th:nth-child(2),
+.fa-snipes-table thead th:nth-child(3) {
+  position: sticky;
+  left: auto;
+  z-index: 2;
+  background: linear-gradient(180deg, rgba(14, 22, 34, 0.98), rgba(9, 13, 21, 0.98));
+  color: var(--table-head);
+}
+
+.fa-snipes-table tbody td:nth-child(2),
+.fa-snipes-table tbody td:nth-child(3) {
+  position: static;
+  left: auto;
+  z-index: auto;
+  background: transparent;
+  color: var(--table-text);
+}
+
 .matchup-table th,
 .matchup-table td {
   border-bottom: 1px solid rgba(148, 163, 184, 0.12);
@@ -1393,7 +1419,7 @@ select {
 
 @media (max-width: 720px) {
   .page-shell {
-    padding: 16px 12px 28px;
+    padding: 16px 12px calc(92px + env(safe-area-inset-bottom));
   }
 
   .topbar,
@@ -1460,5 +1486,46 @@ select {
 
   .trophy-name {
     font-size: 0.9rem;
+  }
+
+  .top-board-tabs {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 120;
+    margin: 0;
+    padding: 8px 8px calc(8px + env(safe-area-inset-bottom));
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 6px;
+    border-top: 1px solid rgba(148, 163, 184, 0.22);
+    background: rgba(9, 13, 21, 0.96);
+    backdrop-filter: blur(12px);
+  }
+
+  .top-board-tab {
+    border-radius: 12px;
+    padding: 6px 4px;
+    min-height: 56px;
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    line-height: 1;
+  }
+
+  .top-board-tab-icon {
+    display: block;
+    font-size: 1rem;
+    line-height: 1;
+  }
+
+  .top-board-tab-label {
+    display: block;
+    font-size: 0.56rem;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
   }
 }
