@@ -148,14 +148,66 @@ h2 {
   display: inline-flex;
   align-items: baseline;
   gap: 10px;
+  flex-wrap: wrap;
 }
 
-.topbar-season {
-  font-size: 1rem;
-  font-weight: 700;
+.season-select-shell {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid rgba(125, 182, 255, 0.36);
+  background: rgba(125, 182, 255, 0.12);
+  border-radius: 999px;
+  padding: 4px 26px 4px 12px;
+  box-shadow: inset 0 0 0 1px rgba(107, 211, 255, 0.08);
+}
+
+.season-select-shell:focus-within {
+  border-color: rgba(107, 211, 255, 0.7);
+  box-shadow: 0 0 0 2px rgba(107, 211, 255, 0.18), inset 0 0 0 1px rgba(107, 211, 255, 0.08);
+}
+
+.season-select {
+  min-width: 132px;
   color: var(--ice);
-  margin-top: 0;
-  letter-spacing: 0.01em;
+  font-size: 0.95rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  padding-right: 18px;
+  cursor: pointer;
+}
+
+.season-select option {
+  color: #0b1020;
+}
+
+.season-select-arrow {
+  position: absolute;
+  right: 9px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--ice);
+  width: 11px;
+  height: 11px;
+  pointer-events: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.season-select-arrow svg {
+  width: 11px;
+  height: 11px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.season-select:focus-visible {
+  outline: none;
 }
 
 .season-filter-bar {
@@ -299,12 +351,41 @@ select {
   display: none;
 }
 
+.top-board-pane {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0;
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  margin-top: 12px;
+}
+
+.top-board-pane .eyebrow {
+  color: var(--ice);
+}
+
+.top-board-pane > * {
+  width: 100%;
+}
+
+.top-board-pane > :not(.bingo-board-card) {
+  margin-left: 0;
+}
+
 .bingo-board-card {
   padding: 4px 0 0;
 }
 
 .bingo-board-header {
-  margin-bottom: 8px;
+  margin-bottom: 10px;
+}
+
+.bingo-board-title {
+  color: var(--ice);
 }
 
 .bingo-board-wrap {
@@ -560,13 +641,14 @@ select {
 .matchup-board {
   display: flex;
   flex-direction: column;
+  width: 100%;
 }
 
 .draft-class-card {
-  border-radius: 12px;
-  background: rgba(148, 163, 184, 0.03);
-  border: 1px solid rgba(148, 163, 184, 0.14);
-  padding: 10px;
+  gap: 12px;
+  padding: 0;
+  background: transparent;
+  border: 0;
 }
 
 .draft-class-header {
@@ -574,14 +656,14 @@ select {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  margin-bottom: 8px;
+  margin-bottom: 0;
 }
 
 .draft-class-header-title {
   display: flex;
   align-items: baseline;
   gap: 10px;
-  flex-wrap: wrap;
+  gap: 6px;
 }
 
 .draft-class-meta {
@@ -659,22 +741,24 @@ select {
 
 .draft-class-table-wrap {
   max-height: 560px;
-  overflow-y: auto;
+  overflow: auto;
   position: relative;
+  width: 100%;
 }
 
 .draft-class-toolbar {
   display: flex;
   flex-wrap: wrap;
   gap: 12px;
-  align-items: end;
-  margin-bottom: 10px;
+  align-items: flex-start;
+  margin-bottom: 8px;
 }
 
 .draft-class-filter-group {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 3px;
+  align-items: flex-start;
 }
 
 .draft-class-team-filter-row {
@@ -700,9 +784,40 @@ select {
 .draft-class-select-wrap {
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 2px;
   width: 100%;
   min-width: 110px;
+  position: relative;
+  padding-top: 0;
+}
+
+.fa-snipes-team-filter-wrap {
+  flex: 0 0 170px;
+  min-width: 170px;
+}
+
+.draft-class-toolbar > .draft-class-filter-group:not(.draft-class-team-group) .draft-class-select-wrap,
+.draft-class-toolbar > .draft-class-filter-group:not(.draft-class-team-group) .draft-multi-select {
+  width: 92px;
+  min-width: 92px;
+}
+
+.draft-class-toolbar > .draft-class-filter-group.draft-class-team-group .draft-class-team-filter-row > .draft-class-select-wrap {
+  width: 170px;
+  min-width: 170px;
+}
+
+.draft-class-toolbar .filter-group-label {
+  position: static;
+  display: block;
+  padding: 0 0 0 1px;
+  margin: 0 0 0 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.43rem;
+  line-height: 1;
+  letter-spacing: 0.11em;
+  transform: none;
 }
 
 .draft-class-select {
@@ -712,8 +827,8 @@ select {
   background: rgba(15, 21, 32, 0.9);
   color: var(--text);
   border-radius: 8px;
-  padding: 6px 10px;
-  font-size: 0.72rem;
+  padding: 5px 9px;
+  font-size: 0.66rem;
   min-width: 100px;
   width: 100%;
 }
@@ -721,6 +836,11 @@ select {
 .draft-multi-select {
   position: relative;
   width: 100%;
+  padding-top: 0;
+}
+
+.draft-class-select-wrap {
+  padding-left: 1px;
 }
 
 .draft-multi-summary {
@@ -730,11 +850,12 @@ select {
   background: rgba(15, 21, 32, 0.9);
   color: var(--text);
   border-radius: 8px;
-  padding: 6px 10px;
-  font-size: 0.72rem;
+  padding: 5px 9px 5px;
+  font-size: 0.66rem;
   min-width: 100px;
   width: 100%;
   user-select: none;
+  margin-left: 1px;
 }
 
 .draft-multi-summary::-webkit-details-marker {
@@ -766,7 +887,7 @@ select {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 0.74rem;
+  font-size: 0.66rem;
   color: var(--text);
 }
 
@@ -789,6 +910,10 @@ select {
 .draft-class-team-group {
   min-width: 260px;
 }
+.draft-class-team-group .draft-multi-select,
+.draft-class-team-group .draft-class-select-wrap {
+  min-width: 170px;
+}
 
 .draft-class-team-filter-row {
   display: flex;
@@ -798,10 +923,11 @@ select {
 }
 
 .matchup-card {
-  border-radius: 12px;
-  background: rgba(148, 163, 184, 0.03);
-  border: 1px solid rgba(148, 163, 184, 0.14);
-  padding: 10px;
+  gap: 12px;
+  width: 100%;
+  padding: 0;
+  background: transparent;
+  border: 0;
 }
 
 .matchup-header {
@@ -876,14 +1002,14 @@ select {
 
 .draft-class-table {
   table-layout: fixed;
-  width: auto;
-  min-width: 0;
+  width: max-content;
+  min-width: 100%;
 }
 
 .fa-snipes-table {
   table-layout: fixed;
-  width: auto;
-  min-width: 0;
+  width: max-content;
+  min-width: 100%;
 }
 
 .matchup-table thead th {
@@ -980,6 +1106,24 @@ select {
   padding-right: 5px;
   font-weight: 500;
   color: var(--table-text);
+}
+
+.draft-class-table th:nth-child(1),
+.draft-class-table td:nth-child(1) {
+  min-width: 34px;
+  width: 34px;
+}
+
+.draft-class-table th:nth-child(2),
+.draft-class-table td:nth-child(2) {
+  min-width: 38px;
+  width: 38px;
+}
+
+.draft-class-table th:nth-child(3),
+.draft-class-table td:nth-child(3) {
+  min-width: 122px;
+  width: 122px;
 }
 
 .matchup-table td {
@@ -1276,16 +1420,17 @@ select {
 }
 
 .leaderboard-panel {
-  background: rgba(17, 26, 43, 0.92);
-  border: 1px solid var(--line);
-  border-radius: 18px;
-  box-shadow: 0 12px 24px rgba(2, 6, 18, 0.28);
-  padding: 14px 14px 12px;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  padding: 0;
   margin-top: 0;
+  width: 100%;
 }
 
 .leaderboard-header {
-  margin-bottom: 10px;
+  margin-bottom: 8px;
 }
 
 .leaderboard-note {
@@ -1298,6 +1443,7 @@ select {
 .leaderboard {
   display: grid;
   gap: 8px;
+  width: 100%;
 }
 
 .leaderboard-entry {
@@ -1393,7 +1539,7 @@ select {
 
 .leaderboard-details {
   display: none;
-  padding: 2px 10px 10px 38px;
+  padding: 2px 0 10px 0;
   background: rgba(9, 13, 21, 0.24);
   border: 1px solid rgba(148, 163, 184, 0.08);
   border-top: 0;
@@ -1406,7 +1552,7 @@ select {
 .leaderboard-details-list {
   list-style: none;
   margin: 0;
-  padding: 0;
+  padding: 8px 0 0;
   display: grid;
   gap: 8px;
 }
@@ -1415,11 +1561,13 @@ select {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
+  justify-items: start;
   gap: 10px;
   padding: 8px 10px;
   border-radius: 10px;
   background: rgba(148, 163, 184, 0.06);
   border: 1px solid rgba(148, 163, 184, 0.08);
+  text-align: left;
 }
 
 .leaderboard-item-name {
@@ -1436,6 +1584,8 @@ select {
   font-size: 0.72rem;
   color: var(--accent);
   font-weight: 700;
+  justify-self: start;
+  text-align: left;
 }
 
 .empty-state {
@@ -1493,7 +1643,7 @@ select {
   }
 
   .topbar-subtitle,
-  .topbar-season {
+  .season-select {
     font-size: 0.86rem;
   }
 
@@ -1515,7 +1665,7 @@ select {
   }
 
   .leaderboard-panel {
-    padding-left: 30px;
+    padding-left: 0;
   }
 
   .trophy-name {
