@@ -68,8 +68,8 @@ const faPlayerStatsDataUrl = window.__GHL_FA_PLAYER_STATS_DATA_URL__ || "/fa-pla
 const trophyHistoryDataUrl = window.__GHL_TROPHY_DATA_HISTORY_URL__ || "/trophy-data-history";
 const matchupHistoryDataUrl = window.__GHL_MATCHUP_DATA_HISTORY_URL__ || "/matchup-data-history";
 const draftClassHistoryDataUrl = window.__GHL_DRAFT_CLASS_HISTORY_DATA_URL__ || "/drafted-player-stats-history";
-const ownerConfigUrl = window.__GHL_OWNER_CONFIG_URL__ || "archived_years/owner_config.csv";
-const logoConfigUrl = window.__GHL_LOGO_CONFIG_URL__ || "logo_config.csv";
+const ownerConfigUrl = window.__GHL_OWNER_CONFIG_URL__ || "config/owner_config.csv";
+const logoConfigUrl = window.__GHL_LOGO_CONFIG_URL__ || "config/logo_config.csv";
 
 let trackerData = {};
 let matchupData = {};
@@ -1718,6 +1718,8 @@ function parseLogoConfigCsv(csvText) {
 function getOwnerConfigUrlCandidates() {
   const candidates = new Set();
   candidates.add(ownerConfigUrl);
+  candidates.add("config/owner_config.csv");
+  candidates.add("/config/owner_config.csv");
   candidates.add("archived_years/owner_config.csv");
   candidates.add("/archived_years/owner_config.csv");
 
@@ -1725,7 +1727,7 @@ function getOwnerConfigUrlCandidates() {
     const dataUrl = new URL(trophyDataUrl, window.location.href);
     const versionMatch = String(ownerConfigUrl).match(/[?&]v=([^&]+)/);
     const version = versionMatch ? `?v=${encodeURIComponent(versionMatch[1])}` : "";
-    candidates.add(`${dataUrl.origin}/archived_years/owner_config.csv${version}`);
+    candidates.add(`${dataUrl.origin}/config/owner_config.csv${version}`);
   } catch (error) {
     // Ignore malformed URLs and proceed with local candidates.
   }
@@ -1736,6 +1738,8 @@ function getOwnerConfigUrlCandidates() {
 function getLogoConfigUrlCandidates() {
   const candidates = new Set();
   candidates.add(logoConfigUrl);
+  candidates.add("config/logo_config.csv");
+  candidates.add("/config/logo_config.csv");
   candidates.add("logo_config.csv");
   candidates.add("/logo_config.csv");
   candidates.add("archived_years/logo_config.csv");
@@ -1745,7 +1749,7 @@ function getLogoConfigUrlCandidates() {
     const dataUrl = new URL(trophyDataUrl, window.location.href);
     const versionMatch = String(logoConfigUrl).match(/[?&]v=([^&]+)/);
     const version = versionMatch ? `?v=${encodeURIComponent(versionMatch[1])}` : "";
-    candidates.add(`${dataUrl.origin}/logo_config.csv${version}`);
+    candidates.add(`${dataUrl.origin}/config/logo_config.csv${version}`);
   } catch (error) {
     // Ignore malformed URLs and proceed with local candidates.
   }

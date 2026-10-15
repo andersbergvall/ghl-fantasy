@@ -34,9 +34,10 @@ _PLAYER_STATS_BY_ID_CACHE: Dict[tuple[str, int], Dict[str, Dict[str, Any]]] = {}
 _STANDINGS_TABLES_CACHE: Dict[tuple[str, int], Dict[str, pd.DataFrame]] = {}
 _SCHEDULE_TABLES_CACHE: Dict[tuple[str, int], Dict[str, pd.DataFrame]] = {}
 DEFAULT_ENV_PATH = Path(r"C:\Users\sweabe\Dropbox\Desktop\GHL\env.txt")
-TROPHY_CONFIG_CSV = PROJECT_ROOT / "archived_years" / "trophy_config.csv"
+CONFIG_DIR = PROJECT_ROOT / "config"
+TROPHY_CONFIG_CSV = CONFIG_DIR / "trophy_config.csv"
 LEGACY_TROPHY_CONFIG_CSV = PROJECT_ROOT / "trophy_config.csv"
-OWNER_CONFIG_CSV = PROJECT_ROOT / "archived_years" / "owner_config.csv"
+OWNER_CONFIG_CSV = CONFIG_DIR / "owner_config.csv"
 _ACTIVE_TEAM_BY_GM_CACHE: Dict[str, str] | None = None
 
 STAT_CATEGORIES = [
@@ -2038,8 +2039,8 @@ ARCHIVED_YEARS_DIR = PROJECT_ROOT / "archived_years"
 
 
 def load_archived_year_config(season_key: str) -> Dict[str, str]:
-    """Read the per-season config rows from archived_years/config.csv."""
-    config_path = ARCHIVED_YEARS_DIR / "config.csv"
+    """Read the per-season config rows from config/config.csv."""
+    config_path = CONFIG_DIR / "config.csv"
     if not config_path.exists():
         return {}
 

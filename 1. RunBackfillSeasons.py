@@ -9,7 +9,7 @@ from MainUpdateTrophyStats import load_env_file
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent
-CONFIG_PATH = PROJECT_ROOT / "archived_years" / "config.csv"
+CONFIG_PATH = PROJECT_ROOT / "config" / "config.csv"
 MAIN_SCRIPT_PATH = PROJECT_ROOT / "MainUpdateTrophyStats.py"
 
 # Hard-code the seasons you want to backfill here.
