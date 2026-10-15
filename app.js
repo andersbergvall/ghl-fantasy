@@ -147,6 +147,8 @@ let draftClassNhlTeamFilter = "ALL";
 let faSnipesSortKey = "FP";
 let faSnipesSortDirection = "desc";
 let faSnipesPageIndex = 0;
+let faSnipesFantasyTeamFilter = new Set();
+let faSnipesOpenMultiFilter = null;
 let activeTopBoardTab = "leaderboard";
 let matchupTableScrollLeft = 0;
 let draftClassTableScrollLeft = 0;
@@ -154,6 +156,7 @@ let faSnipesTableScrollLeft = 0;
 let matchupScrollRestoreTimers = [];
 let draftOpenMultiFilter = null;
 let draftOutsideClickHandlerBound = false;
+let faSnipesOutsideClickHandlerBound = false;
 
 function clearMatchupScrollRestoreTimers() {
   matchupScrollRestoreTimers.forEach((timerId) => window.clearTimeout(timerId));
@@ -768,7 +771,21 @@ function renderFaSnipesBoard(seasonKey) {
     faSnipesTableScrollLeft = existingTableWrap.scrollLeft;
   }
 
-  const faRows = sortFaSnipesRows(getFaSnipesRows(seasonKey));
+  const allFaRows = getFaSnipesRows(seasonKey);
+  const fantasyTeamOptions = Array.from(new Set(allFaRows
+    .map((row) => String(row?.["FANTASY TEAM"] || "").trim())
+    .filter(Boolean)))
+    .sort((left, right) => left.localeCompare(right))
+    .map((teamKey) => ({ value: teamKey, label: teamKey }));
+
+  faSnipesFantasyTeamFilter = getFilteredSelection(faSnipesFantasyTeamFilter, fantasyTeamOptions.map((option) => option.value));
+
+  const filteredFaRows = allFaRows.filter((row) => {
+    const fantasyTeamValue = String(row?.["FANTASY TEAM"] || "").trim();
+    return !faSnipesFantasyTeamFilter.size || faSnipesFantasyTeamFilter.has(fantasyTeamValue);
+  });
+
+  const faRows = sortFaSnipesRows(filteredFaRows);
   const pageSize = 48;
   const totalPages = Math.max(1, Math.ceil(faRows.length / pageSize));
   if (faSnipesPageIndex >= totalPages) {
@@ -813,6 +830,21 @@ function renderFaSnipesBoard(seasonKey) {
           <button class="matchup-nav-btn" data-fa-direction="prev" type="button" ${faSnipesPageIndex === 0 ? "disabled" : ""}>◀</button>
           <span class="draft-class-page-label">${faRows.length ? `${startIndex + 1}–${endIndex}` : "0–0"}</span>
           <button class="matchup-nav-btn" data-fa-direction="next" type="button" ${faSnipesPageIndex >= totalPages - 1 ? "disabled" : ""}>▶</button>
+        </div>
+      </div>
+      <div class="draft-class-toolbar">
+        <div class="draft-class-filter-group draft-class-team-group">
+          <div class="draft-class-team-filter-row">
+            <label class="draft-class-select-wrap">
+              <span class="filter-group-label">Fantasy Team</span>
+              ${renderFaCheckboxDropdown({
+                filterType: "team",
+                selectedSet: faSnipesFantasyTeamFilter,
+                options: fantasyTeamOptions,
+                triggerLabel: "Select",
+              })}
+            </label>
+          </div>
         </div>
       </div>
       <div class="matchup-table-wrap draft-class-table-wrap fa-snipes-table-wrap">
@@ -863,6 +895,66 @@ function renderFaSnipesBoard(seasonKey) {
       renderFaSnipesBoard(seasonKey);
     });
   });
+
+  faSnipesPane.querySelectorAll(".draft-multi-select")?.forEach((detailsElement) => {
+    detailsElement.addEventListener("toggle", () => {
+      const filterType = detailsElement.getAttribute("data-fa-multi-filter");
+      if (detailsElement.open) {
+        faSnipesOpenMultiFilter = filterType;
+        faSnipesPane.querySelectorAll(".draft-multi-select").forEach((otherElement) => {
+          if (otherElement !== detailsElement) {
+            otherElement.open = false;
+          }
+        });
+      } else if (faSnipesOpenMultiFilter === filterType) {
+        faSnipesOpenMultiFilter = null;
+      }
+    });
+  });
+
+  faSnipesPane.querySelectorAll("[data-fa-multi-option='team']")?.forEach((input) => {
+    input.addEventListener("change", () => {
+      const selectedValues = Array.from(faSnipesPane.querySelectorAll("[data-fa-multi-option='team']:checked"))
+        .map((checkbox) => checkbox.value);
+      faSnipesFantasyTeamFilter = new Set(selectedValues);
+      faSnipesOpenMultiFilter = "team";
+      faSnipesPageIndex = 0;
+      renderFaSnipesBoard(seasonKey);
+    });
+  });
+
+  faSnipesPane.querySelectorAll("[data-fa-multi-clear]")?.forEach((button) => {
+    button.addEventListener("click", (event) => {
+      event.preventDefault();
+      const filterType = button.getAttribute("data-fa-multi-clear");
+      if (filterType === "team") {
+        faSnipesFantasyTeamFilter = new Set();
+      }
+      faSnipesOpenMultiFilter = filterType;
+      faSnipesPageIndex = 0;
+      renderFaSnipesBoard(seasonKey);
+    });
+  });
+
+  if (!faSnipesOutsideClickHandlerBound) {
+    document.addEventListener("click", (event) => {
+      if (!faSnipesPane || faSnipesPane.hidden) {
+        return;
+      }
+      if (!(event.target instanceof Element)) {
+        return;
+      }
+      if (event.target.closest(".draft-multi-select")) {
+        return;
+      }
+
+      faSnipesOpenMultiFilter = null;
+      faSnipesPane.querySelectorAll(".draft-multi-select[open]").forEach((detailsElement) => {
+        detailsElement.open = false;
+      });
+    });
+    faSnipesOutsideClickHandlerBound = true;
+  }
 }
 
 function getDraftClassRows(seasonKey) {
@@ -955,6 +1047,35 @@ function renderDraftCheckboxDropdown({
       <div class="draft-multi-menu">
         ${optionRows}
         <button class="draft-multi-clear" type="button" data-multi-clear="${filterType}">Clear All</button>
+      </div>
+    </details>
+  `;
+}
+
+function renderFaCheckboxDropdown({
+  filterType,
+  selectedSet,
+  options,
+  triggerLabel,
+}) {
+  const optionRows = options
+    .map((option) => {
+      const checked = selectedSet.has(option.value) ? "checked" : "";
+      return `
+        <label class="draft-multi-option">
+          <input type="checkbox" data-fa-multi-option="${filterType}" value="${escapeHtml(option.value)}" ${checked} />
+          <span>${escapeHtml(option.label)}</span>
+        </label>
+      `;
+    })
+    .join("");
+
+  return `
+    <details class="draft-multi-select" data-fa-multi-filter="${filterType}" ${faSnipesOpenMultiFilter === filterType ? "open" : ""}>
+      <summary class="draft-multi-summary">${escapeHtml(triggerLabel)}</summary>
+      <div class="draft-multi-menu">
+        ${optionRows}
+        <button class="draft-multi-clear" type="button" data-fa-multi-clear="${filterType}">Clear All</button>
       </div>
     </details>
   `;
