@@ -31,6 +31,8 @@ const seasonSelect = document.getElementById("seasonSelect");
 const trophyCount = document.getElementById("trophyCount");
 const teamCount = document.getElementById("teamCount");
 const lastUpdatedText = document.getElementById("lastUpdatedText");
+const seasonSelectShell = document.querySelector(".season-select-shell");
+const seasonSelectArrow = document.querySelector(".season-select-arrow");
 const matchupBoard = document.getElementById("matchupBoard");
 const trophyGrid = document.getElementById("trophyGrid");
 const leaderboard = document.getElementById("leaderboard");
@@ -156,6 +158,25 @@ let matchupScrollRestoreTimers = [];
 let draftOpenMultiFilter = null;
 let draftOutsideClickHandlerBound = false;
 let faSnipesOutsideClickHandlerBound = false;
+
+function openSeasonSelectMenu() {
+  if (!seasonSelect) {
+    return;
+  }
+
+  seasonSelect.focus({ preventScroll: true });
+
+  if (typeof seasonSelect.showPicker === "function") {
+    try {
+      seasonSelect.showPicker();
+      return;
+    } catch (error) {
+      // Fall back to click for browsers that block showPicker.
+    }
+  }
+
+  seasonSelect.click();
+}
 
 function clearMatchupScrollRestoreTimers() {
   matchupScrollRestoreTimers.forEach((timerId) => window.clearTimeout(timerId));
@@ -1015,7 +1036,7 @@ function renderDraftCheckboxDropdown({
       <summary class="draft-multi-summary">${escapeHtml(triggerLabel)}</summary>
       <div class="draft-multi-menu">
         ${optionRows}
-        <button class="draft-multi-clear" type="button" data-multi-clear="${filterType}">Clear All</button>
+        <button class="draft-multi-clear" type="button" data-multi-clear="${filterType}">Clear</button>
       </div>
     </details>
   `;
@@ -1044,7 +1065,7 @@ function renderFaCheckboxDropdown({
       <summary class="draft-multi-summary">${escapeHtml(triggerLabel)}</summary>
       <div class="draft-multi-menu">
         ${optionRows}
-        <button class="draft-multi-clear" type="button" data-fa-multi-clear="${filterType}">Clear All</button>
+        <button class="draft-multi-clear" type="button" data-fa-multi-clear="${filterType}">Clear</button>
       </div>
     </details>
   `;
@@ -1196,7 +1217,7 @@ function renderDraftClassBoard(seasonKey) {
 
     <div class="draft-class-toolbar">
       <div class="draft-class-filter-group">
-        <label class="draft-class-select-wrap">
+        <label class="draft-class-select-wrap draft-round-filter-wrap">
           <span class="filter-group-label">ROUND</span>
           ${renderDraftCheckboxDropdown({
             filterType: "round",
@@ -1207,7 +1228,7 @@ function renderDraftClassBoard(seasonKey) {
         </label>
       </div>
       <div class="draft-class-filter-group">
-        <label class="draft-class-select-wrap">
+        <label class="draft-class-select-wrap draft-position-filter-wrap">
           <span class="filter-group-label">Position</span>
           ${renderDraftCheckboxDropdown({
             filterType: "position",
@@ -1219,7 +1240,7 @@ function renderDraftClassBoard(seasonKey) {
       </div>
       <div class="draft-class-filter-group draft-class-team-group">
         <div class="draft-class-team-filter-row">
-          <label class="draft-class-select-wrap">
+          <label class="draft-class-select-wrap draft-fantasy-team-filter-wrap">
             <span class="filter-group-label">Fantasy Team</span>
             ${renderDraftCheckboxDropdown({
               filterType: "team",
@@ -1228,7 +1249,7 @@ function renderDraftClassBoard(seasonKey) {
               triggerLabel: "Select",
             })}
           </label>
-          <label class="draft-class-select-wrap">
+          <label class="draft-class-select-wrap draft-nhlteam-filter-wrap">
             <span class="filter-group-label">NHL Team</span>
             ${renderDraftCheckboxDropdown({
               filterType: "nhlteam",
@@ -2384,6 +2405,21 @@ seasonSelect.addEventListener("change", (event) => {
   faSnipesPageIndex = 0;
   renderTrophies(event.target.value);
 });
+
+if (seasonSelectShell) {
+  seasonSelectShell.addEventListener("click", (event) => {
+    if (event.target === seasonSelect) {
+      return;
+    }
+    openSeasonSelectMenu();
+  });
+}
+
+if (seasonSelectArrow) {
+  seasonSelectArrow.addEventListener("click", () => {
+    openSeasonSelectMenu();
+  });
+}
 
 if (tabMatchupBoard) {
   tabMatchupBoard.addEventListener("click", () => setTopBoardTab("matchup"));
