@@ -1216,7 +1216,7 @@ function renderDraftClassBoard(seasonKey) {
     </div>
 
     <div class="draft-class-toolbar">
-      <div class="draft-class-filter-group">
+      <div class="draft-class-filter-group draft-round-filter-group">
         <label class="draft-class-select-wrap draft-round-filter-wrap">
           <span class="filter-group-label">ROUND</span>
           ${renderDraftCheckboxDropdown({
@@ -1227,7 +1227,7 @@ function renderDraftClassBoard(seasonKey) {
           })}
         </label>
       </div>
-      <div class="draft-class-filter-group">
+      <div class="draft-class-filter-group draft-position-filter-group">
         <label class="draft-class-select-wrap draft-position-filter-wrap">
           <span class="filter-group-label">Position</span>
           ${renderDraftCheckboxDropdown({

@@ -11,7 +11,7 @@ The app defaults to loading live JSON from these endpoints:
 
 ## Backfill runner
 
-Use [RunBackfillSeasons.py](c:/Users/sweabe/Dropbox/Desktop/GHL/AI Projects/Trophy%20Tracker/RunBackfillSeasons.py) to run one or more archived seasons from [config/config.csv](c:/Users/sweabe/Dropbox/Desktop/GHL/AI Projects/Trophy%20Tracker/config/config.csv).
+Use [RunBackfillSeasons.py](RunBackfillSeasons.py) to run one or more archived seasons from [config/config.csv](config/config.csv).
 
 1. Edit `BACKFILL_SEASONS` in `RunBackfillSeasons.py`.
 2. Make sure each season exists in `config/config.csv` with env-style columns such as `SEASON_KEY`, `FANTRAX_LEAGUE_ID`, `WEEKS_IN_SEASON`, `FIRST_WEEK`, and `WRITE_ARCHIVED_JSONS`.

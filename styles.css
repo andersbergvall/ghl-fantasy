@@ -746,7 +746,7 @@ select {
 .draft-class-toolbar {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: 3px;
   align-items: flex-start;
   margin-bottom: 8px;
 }
@@ -754,14 +754,15 @@ select {
 .draft-class-filter-group {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 1px;
   align-items: flex-start;
+  flex: 0 0 auto;
 }
 
 .draft-class-team-filter-row {
   display: flex;
   align-items: flex-end;
-  gap: 10px;
+  gap: 3px;
 }
 
 .draft-class-vabo-note {
@@ -795,19 +796,39 @@ select {
 
 .draft-class-toolbar > .draft-class-filter-group:not(.draft-class-team-group) .draft-class-select-wrap,
 .draft-class-toolbar > .draft-class-filter-group:not(.draft-class-team-group) .draft-multi-select {
-  width: 78px;
-  min-width: 78px;
+  width: 60px;
+  min-width: 60px;
+}
+
+.draft-class-toolbar > .draft-round-filter-group,
+.draft-class-toolbar > .draft-position-filter-group {
+  width: 56px;
+  min-width: 56px;
+  flex: 0 0 56px;
+}
+
+.draft-class-toolbar > .draft-round-filter-group .draft-class-select-wrap,
+.draft-class-toolbar > .draft-position-filter-group .draft-class-select-wrap,
+.draft-class-toolbar > .draft-round-filter-group .draft-multi-select,
+.draft-class-toolbar > .draft-position-filter-group .draft-multi-select {
+  width: 100%;
+  min-width: 0;
 }
 
 .draft-class-toolbar > .draft-class-filter-group.draft-class-team-group .draft-class-team-filter-row > .draft-class-select-wrap {
-  width: 142px;
-  min-width: 142px;
+  width: 92px;
+  min-width: 92px;
+}
+
+.draft-class-toolbar > .draft-class-filter-group.draft-class-team-group .draft-class-team-filter-row > .draft-nhlteam-filter-wrap {
+  width: 70px;
+  min-width: 70px;
 }
 
 .draft-class-toolbar .filter-group-label {
   position: static;
   display: block;
-  padding: 0 0 0 1px;
+  padding: 0;
   margin: 0 0 0 0;
   background: transparent;
   color: var(--muted);
@@ -824,7 +845,7 @@ select {
   background: rgba(15, 21, 32, 0.9);
   color: var(--text);
   border-radius: 8px;
-  padding: 5px 9px;
+  padding: 3px 5px;
   font-size: 0.58rem;
   min-width: 0;
   width: 100%;
@@ -837,7 +858,7 @@ select {
 }
 
 .draft-class-select-wrap {
-  padding-left: 1px;
+  padding-left: 0;
 }
 
 .draft-multi-summary {
@@ -847,12 +868,12 @@ select {
   background: rgba(15, 21, 32, 0.9);
   color: var(--text);
   border-radius: 8px;
-  padding: 5px 9px 5px;
+  padding: 3px 5px;
   font-size: 0.58rem;
   min-width: 0;
   width: 100%;
   user-select: none;
-  margin-left: 1px;
+  margin-left: 0;
 }
 
 .draft-multi-summary::-webkit-details-marker {
@@ -880,12 +901,22 @@ select {
   box-shadow: 0 12px 28px rgba(2, 6, 14, 0.6);
 }
 
+.draft-class-team-group .draft-multi-select[data-multi-filter="team"] .draft-multi-menu {
+  width: max-content;
+  min-width: 100%;
+  right: auto;
+}
+
 .draft-multi-option {
   display: flex;
   align-items: center;
   gap: 8px;
   font-size: 0.56rem;
   color: var(--text);
+}
+
+.draft-class-team-group .draft-multi-select[data-multi-filter="team"] .draft-multi-option span {
+  white-space: nowrap;
 }
 
 .draft-multi-option input {
@@ -906,17 +937,17 @@ select {
 }
 
 .draft-class-team-group {
-  min-width: 226px;
+  min-width: 165px;
 }
 .draft-class-team-group .draft-multi-select,
 .draft-class-team-group .draft-class-select-wrap {
-  min-width: 142px;
+  min-width: 0;
 }
 
 .draft-class-team-filter-row {
   display: flex;
   align-items: flex-end;
-  gap: 10px;
+  gap: 3px;
   width: 100%;
 }
 
@@ -1699,22 +1730,32 @@ select {
   }
 
   .draft-class-toolbar {
-    flex-wrap: nowrap;
+    flex-wrap: wrap;
     align-items: flex-start;
-    gap: 6px;
-    overflow-x: auto;
-    padding-bottom: 2px;
-    scrollbar-width: thin;
-  }
-
-  .draft-class-toolbar::-webkit-scrollbar {
-    height: 6px;
+    gap: 3px;
+    overflow: visible;
+    padding-bottom: 0;
   }
 
   .draft-class-toolbar > .draft-class-filter-group:not(.draft-class-team-group) .draft-class-select-wrap,
   .draft-class-toolbar > .draft-class-filter-group:not(.draft-class-team-group) .draft-multi-select {
     width: 60px;
     min-width: 60px;
+  }
+
+  .draft-class-toolbar > .draft-round-filter-group,
+  .draft-class-toolbar > .draft-position-filter-group {
+    width: 52px;
+    min-width: 52px;
+    flex: 0 0 52px;
+  }
+
+  .draft-class-toolbar > .draft-round-filter-group .draft-class-select-wrap,
+  .draft-class-toolbar > .draft-position-filter-group .draft-class-select-wrap,
+  .draft-class-toolbar > .draft-round-filter-group .draft-multi-select,
+  .draft-class-toolbar > .draft-position-filter-group .draft-multi-select {
+    width: 100%;
+    min-width: 0;
   }
 
   .draft-class-toolbar .draft-fantasy-team-filter-wrap {
@@ -1734,7 +1775,7 @@ select {
   .draft-class-select,
   .draft-multi-summary {
     font-size: 0.54rem;
-    padding: 3px 6px 3px;
+    padding: 2px 4px;
   }
 
   .draft-multi-option {
@@ -1748,7 +1789,7 @@ select {
 
   .draft-class-toolbar .filter-group-label {
     font-size: 0.39rem;
-    margin: 0 0 0 1px;
+    margin: 0;
   }
 
   .trophy-summary-right {
