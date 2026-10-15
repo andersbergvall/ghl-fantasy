@@ -11,6 +11,7 @@
       window.__GHL_TROPHY_DATA_URL__ = `${workerBase}/trophy-data?v=20261007`;
       window.__GHL_MATCHUP_DATA_URL__ = `${workerBase}/matchup-data?v=20261007`;
       window.__GHL_DRAFT_CLASS_DATA_URL__ = `${workerBase}/drafted-player-stats?v=20261008`;
+      window.__GHL_FA_PLAYER_STATS_DATA_URL__ = `${workerBase}/fa-player-stats?v=20261015`;
       window.__GHL_TROPHY_DATA_HISTORY_URL__ = `${workerBase}/trophy-data-history?v=20261007`;
       window.__GHL_MATCHUP_DATA_HISTORY_URL__ = `${workerBase}/matchup-data-history?v=20261007`;
       window.__GHL_DRAFT_CLASS_HISTORY_DATA_URL__ = `${workerBase}/drafted-player-stats-history?v=20261008`;
@@ -60,6 +61,7 @@
                 <button id="tabSeasonLeaderboard" class="top-board-tab is-active" type="button" role="tab" aria-selected="true" aria-controls="leaderboardPane">Leaderboard</button>
                 <button id="tabMatchupBoard" class="top-board-tab" type="button" role="tab" aria-selected="false" aria-controls="matchupPane">Matchups</button>
                 <button id="tabDraftClass" class="top-board-tab" type="button" role="tab" aria-selected="false" aria-controls="draftClassPane">Draft</button>
+                <button id="tabFaSnipes" class="top-board-tab" type="button" role="tab" aria-selected="false" aria-controls="faSnipesPane">FA Snipes</button>
                 <button id="tabBingoBoard" class="top-board-tab" type="button" role="tab" aria-selected="false" aria-controls="bingoBoardPane">Bingo!</button>
               </div>
 
@@ -78,6 +80,8 @@
               </div>
 
               <div id="draftClassPane" class="top-board-pane" role="tabpanel" aria-labelledby="tabDraftClass" hidden></div>
+
+              <div id="faSnipesPane" class="top-board-pane" role="tabpanel" aria-labelledby="tabFaSnipes" hidden></div>
 
               <div id="bingoBoardPane" class="top-board-pane" role="tabpanel" aria-labelledby="tabBingoBoard" hidden></div>
             </section>

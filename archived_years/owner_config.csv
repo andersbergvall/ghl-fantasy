@@ -1,26 +1,26 @@
-GM;team_name
-ÖGB;Barbeque Steamers
-TACO;Brussels Belgian Blues
-GREVE;Multiple Scorgasms
-OYST;Wan Chai Oysters
-RAID;Gävle Raiders
-WARS;Warszawa White Russians
-WARS;Tessin Bourbons
-101S;Taipei 101s
-101S;Taipei 101's
-ÖGB;Södermalm Hipsters
-BBB;Bönan Bonebreakers
-TACO;Tellus Tacos
-FROGS;Frescati Frogs
-ÖGB;Mosebacke Mooseheads
-LADY;Bangkok Ladyboys
-RUN;Birkastan Babysitters
-VALK;Valhalla Valkyries
-TACO;Tuna Tacos
-031N;031 Nörrebro
-RUN;Rinkeby Runners
-FROGS;Essingen Frogs
-ÖGB;Östermalm Golden Bananas
-ÖGB;Ömalm Golden Bananas
-FROGS;Västermalm Frogs
-HELL;Hagaström Hellraisers
+GM;team_name;active_name
+GB;Barbeque Steamers;0
+TACO;Brussels Belgian Blues;0
+GREVE;Multiple Scorgasms;0
+OYST;Wan Chai Oysters;1
+GOTT;Gävle Raiders;1
+BOUR;Warszawa White Russians;0
+BOUR;Tessin Bourbons;1
+101;Taipei 101s;0
+101;Taipei 101's;1
+GB;Södermalm Hipsters;0
+BBB;Bönan Bonebreakers;1
+TACO;Tellus Tacos;0
+FROG;Frescati Frogs;0
+GB;Mosebacke Mooseheads;0
+LADY;Bangkok Ladyboys;1
+FALK;Birkastan Babysitters;0
+VAL;Valhalla Valkyries;1
+TACO;Tuna Tacos;1
+031N;031 Nörrebro;0
+FALK;Rinkeby Runners;1
+FROG;Essingen Frogs;0
+GB;Östermalm Golden Bananas;0
+GB;Ömalm Golden Bananas;1
+FROG;Västermalm Frogs;1
+HAH;Hagaström Hellraisers;1

@@ -38,10 +38,12 @@ const leaderboard = document.getElementById("leaderboard");
 const tabMatchupBoard = document.getElementById("tabMatchupBoard");
 const tabSeasonLeaderboard = document.getElementById("tabSeasonLeaderboard");
 const tabDraftClass = document.getElementById("tabDraftClass");
+const tabFaSnipes = document.getElementById("tabFaSnipes");
 const tabBingoBoard = document.getElementById("tabBingoBoard");
 const matchupPane = document.getElementById("matchupPane");
 const leaderboardPane = document.getElementById("leaderboardPane");
 const draftClassPane = document.getElementById("draftClassPane");
+const faSnipesPane = document.getElementById("faSnipesPane");
 const bingoBoardPane = document.getElementById("bingoBoardPane");
 const draftClassTabSeason = document.getElementById("draftClassTabSeason");
 
@@ -62,6 +64,7 @@ const sectionLabels = {
 const trophyDataUrl = window.__GHL_TROPHY_DATA_URL__ || "/trophy-data";
 const matchupDataUrl = window.__GHL_MATCHUP_DATA_URL__ || "/matchup-data";
 const draftClassDataUrl = window.__GHL_DRAFT_CLASS_DATA_URL__ || "/drafted-player-stats";
+const faPlayerStatsDataUrl = window.__GHL_FA_PLAYER_STATS_DATA_URL__ || "/fa-player-stats";
 const trophyHistoryDataUrl = window.__GHL_TROPHY_DATA_HISTORY_URL__ || "/trophy-data-history";
 const matchupHistoryDataUrl = window.__GHL_MATCHUP_DATA_HISTORY_URL__ || "/matchup-data-history";
 const draftClassHistoryDataUrl = window.__GHL_DRAFT_CLASS_HISTORY_DATA_URL__ || "/drafted-player-stats-history";
@@ -71,9 +74,11 @@ const logoConfigUrl = window.__GHL_LOGO_CONFIG_URL__ || "logo_config.csv";
 let trackerData = {};
 let matchupData = {};
 let draftClassData = {};
+let faPlayerStatsData = {};
 let historicalTrackerData = {};
 let historicalMatchupData = {};
 let historicalDraftClassData = {};
+let historicalFaPlayerStatsData = {};
 let ownerConfigMap = new Map();
 let teamLogoConfigMap = new Map();
 const fallbackTeamLogoConfigMap = new Map([
@@ -139,9 +144,13 @@ let draftClassRoundFilter = new Set();
 let draftClassPositionFilter = "ALL";
 let draftClassFantasyTeamFilter = new Set();
 let draftClassNhlTeamFilter = "ALL";
+let faSnipesSortKey = "FP";
+let faSnipesSortDirection = "desc";
+let faSnipesPageIndex = 0;
 let activeTopBoardTab = "leaderboard";
 let matchupTableScrollLeft = 0;
 let draftClassTableScrollLeft = 0;
+let faSnipesTableScrollLeft = 0;
 let matchupScrollRestoreTimers = [];
 let draftOpenMultiFilter = null;
 let draftOutsideClickHandlerBound = false;
@@ -168,6 +177,7 @@ function setTopBoardTab(tabKey) {
   const isMatchup = tabKey === "matchup";
   const isLeaderboard = tabKey === "leaderboard";
   const isDraftClass = tabKey === "draft-class";
+  const isFaSnipes = tabKey === "fa-snipes";
   const isBingo = tabKey === "bingo";
 
   if (tabMatchupBoard) {
@@ -181,6 +191,10 @@ function setTopBoardTab(tabKey) {
   if (tabDraftClass) {
     tabDraftClass.classList.toggle("is-active", isDraftClass);
     tabDraftClass.setAttribute("aria-selected", String(isDraftClass));
+  }
+  if (tabFaSnipes) {
+    tabFaSnipes.classList.toggle("is-active", isFaSnipes);
+    tabFaSnipes.setAttribute("aria-selected", String(isFaSnipes));
   }
   if (tabBingoBoard) {
     tabBingoBoard.classList.toggle("is-active", isBingo);
@@ -196,6 +210,12 @@ function setTopBoardTab(tabKey) {
     draftClassPane.hidden = !isDraftClass;
     if (isDraftClass && !!seasonSelect?.value) {
       renderDraftClassBoard(seasonSelect.value);
+    }
+  }
+  if (faSnipesPane) {
+    faSnipesPane.hidden = !isFaSnipes;
+    if (isFaSnipes && !!seasonSelect?.value) {
+      renderFaSnipesBoard(seasonSelect.value);
     }
   }
   if (bingoBoardPane) {
@@ -659,6 +679,191 @@ const draftClassColumnWidths = {
   "Fantasy Team": 108,
   NHLTEAM: 62,
 };
+
+const faSnipesColumns = [
+  { key: "PLAYER", label: "PLAYER", type: "string" },
+  { key: "POS", label: "POS", type: "string" },
+  { key: "FP", label: "FP", type: "number" },
+  { key: "FP RK", label: "FP RK", type: "number" },
+  { key: "FP/G", label: "FP/G", type: "number" },
+  { key: "FP/G RK", label: "FP/G RK", type: "number" },
+  { key: "ROS", label: "ROS", type: "number" },
+  { key: "FANTASY TEAM", label: "FANTASY TEAM", type: "string" },
+  { key: "NHL TEAM", label: "NHL TEAM", type: "string" },
+];
+
+function getFaSnipesRows(seasonKey) {
+  const faSource = getSeasonPayloadForSource("fa", seasonKey);
+  const seasonNode = faSource?.season?.[seasonKey] || {};
+  const rows = seasonNode.players || [];
+  return Array.isArray(rows) ? rows : [];
+}
+
+function getFaSnipesCellValue(row, key) {
+  if (!row || typeof row !== "object") {
+    return undefined;
+  }
+  return row[key];
+}
+
+function formatFaSnipesCell(column, value) {
+  if (column.key === "ROS") {
+    const numeric = Number(value ?? 0);
+    if (!Number.isFinite(numeric)) {
+      return "0%";
+    }
+    return `${Math.round(numeric)}%`;
+  }
+
+  if (column.key === "FP RK" || column.key === "FP/G RK") {
+    const numeric = Number(value);
+    return Number.isFinite(numeric) ? String(Math.round(numeric)) : "";
+  }
+
+  if (column.type === "number") {
+    const numeric = Number(value ?? 0);
+    if (!Number.isFinite(numeric)) {
+      return "0.00";
+    }
+    return numeric.toFixed(2);
+  }
+
+  return value === undefined || value === null ? "" : String(value);
+}
+
+function sortFaSnipesRows(rows) {
+  const column = faSnipesColumns.find((entry) => entry.key === faSnipesSortKey) || faSnipesColumns[0];
+  const direction = faSnipesSortDirection === "asc" ? 1 : -1;
+
+  return [...rows].sort((left, right) => {
+    const leftValue = getFaSnipesCellValue(left, column.key);
+    const rightValue = getFaSnipesCellValue(right, column.key);
+
+    if (column.type === "number") {
+      const leftNumber = getDraftClassSortNumber(leftValue);
+      const rightNumber = getDraftClassSortNumber(rightValue);
+      if (leftNumber !== rightNumber) {
+        return (leftNumber - rightNumber) * direction;
+      }
+      return String(left?.PLAYER || "").localeCompare(String(right?.PLAYER || ""));
+    }
+
+    const leftText = String(leftValue ?? "");
+    const rightText = String(rightValue ?? "");
+    const compare = leftText.localeCompare(rightText);
+    if (compare !== 0) {
+      return compare * direction;
+    }
+    return String(left?.PLAYER || "").localeCompare(String(right?.PLAYER || ""));
+  });
+}
+
+function renderFaSnipesBoard(seasonKey) {
+  if (!faSnipesPane) {
+    return;
+  }
+
+  const existingTableWrap = faSnipesPane.querySelector(".fa-snipes-table-wrap");
+  if (existingTableWrap) {
+    faSnipesTableScrollLeft = existingTableWrap.scrollLeft;
+  }
+
+  const faRows = sortFaSnipesRows(getFaSnipesRows(seasonKey));
+  const pageSize = 48;
+  const totalPages = Math.max(1, Math.ceil(faRows.length / pageSize));
+  if (faSnipesPageIndex >= totalPages) {
+    faSnipesPageIndex = totalPages - 1;
+  }
+  if (faSnipesPageIndex < 0) {
+    faSnipesPageIndex = 0;
+  }
+
+  const startIndex = faSnipesPageIndex * pageSize;
+  const endIndex = Math.min(startIndex + pageSize, faRows.length);
+  const pageRows = faRows.slice(startIndex, endIndex);
+
+  const headerCells = faSnipesColumns
+    .map((column) => {
+      const isActive = faSnipesSortKey === column.key;
+      const indicator = isActive ? (faSnipesSortDirection === "asc" ? "↑" : "↓") : "↕";
+      return `<th><button class="matchup-sort${isActive ? " is-active" : ""}" data-fa-column="${column.key}" type="button"><span class="matchup-sort-label">${column.label}</span><span class="matchup-sort-indicator">${indicator}</span></button></th>`;
+    })
+    .join("");
+
+  const bodyRows = pageRows
+    .map((row) => {
+      const cells = faSnipesColumns
+        .map((column, columnIndex) => {
+          const stickyClass = columnIndex === 0 ? " table-highlight" : "";
+          return `<td class="${stickyClass.trim()}">${formatFaSnipesCell(column, getFaSnipesCellValue(row, column.key))}</td>`;
+        })
+        .join("");
+      return `<tr>${cells}</tr>`;
+    })
+    .join("");
+
+  faSnipesPane.innerHTML = `
+    <section class="draft-class-card">
+      <div class="draft-class-header">
+        <div class="draft-class-header-title">
+          <p class="eyebrow">FA Snipes</p>
+          <div class="draft-class-meta">${faRows.length} players</div>
+        </div>
+        <div class="draft-class-pagination">
+          <button class="matchup-nav-btn" data-fa-direction="prev" type="button" ${faSnipesPageIndex === 0 ? "disabled" : ""}>◀</button>
+          <span class="draft-class-page-label">${faRows.length ? `${startIndex + 1}–${endIndex}` : "0–0"}</span>
+          <button class="matchup-nav-btn" data-fa-direction="next" type="button" ${faSnipesPageIndex >= totalPages - 1 ? "disabled" : ""}>▶</button>
+        </div>
+      </div>
+      <div class="matchup-table-wrap draft-class-table-wrap fa-snipes-table-wrap">
+        <table class="matchup-table draft-class-table fa-snipes-table">
+          <thead><tr>${headerCells}</tr></thead>
+          <tbody>${bodyRows || '<tr><td colspan="9">No FA snipes found for this season.</td></tr>'}</tbody>
+        </table>
+      </div>
+    </section>
+  `;
+
+  const faTableWrap = faSnipesPane.querySelector(".fa-snipes-table-wrap");
+  if (faTableWrap) {
+    faTableWrap.scrollLeft = faSnipesTableScrollLeft;
+    faTableWrap.addEventListener("scroll", () => {
+      faSnipesTableScrollLeft = faTableWrap.scrollLeft;
+    });
+  }
+
+  faSnipesPane.querySelectorAll(".matchup-nav-btn[data-fa-direction]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const direction = button.getAttribute("data-fa-direction");
+      if (direction === "prev") {
+        faSnipesPageIndex = Math.max(0, faSnipesPageIndex - 1);
+      } else if (direction === "next") {
+        faSnipesPageIndex = Math.min(totalPages - 1, faSnipesPageIndex + 1);
+      }
+      renderFaSnipesBoard(seasonKey);
+    });
+  });
+
+  faSnipesPane.querySelectorAll(".matchup-sort[data-fa-column]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const key = button.getAttribute("data-fa-column") || "FP";
+      if (faSnipesSortKey === key) {
+        faSnipesSortDirection = faSnipesSortDirection === "asc" ? "desc" : "asc";
+      } else {
+        faSnipesSortKey = key;
+        if (["FP", "FP/G"].includes(key)) {
+          faSnipesSortDirection = "desc";
+        } else if (["FP RK", "FP/G RK", "ROS"].includes(key)) {
+          faSnipesSortDirection = "asc";
+        } else {
+          faSnipesSortDirection = "asc";
+        }
+      }
+      faSnipesPageIndex = 0;
+      renderFaSnipesBoard(seasonKey);
+    });
+  });
+}
 
 function getDraftClassRows(seasonKey) {
   const draftSource = getSeasonPayloadForSource("draft", seasonKey);
@@ -1772,6 +1977,7 @@ function getSeasonPayloadForSource(sourceKey, seasonKey) {
     trophy: { active: trackerData, history: historicalTrackerData },
     matchup: { active: matchupData, history: historicalMatchupData },
     draft: { active: draftClassData, history: historicalDraftClassData },
+    fa: { active: faPlayerStatsData, history: historicalFaPlayerStatsData },
   };
 
   const targetSource = sourceMap[sourceKey] || { active: {}, history: {} };
@@ -1970,6 +2176,9 @@ function renderTrophies(seasonKey) {
   if (draftClassPane) {
     renderDraftClassBoard(seasonKey);
   }
+  if (faSnipesPane) {
+    renderFaSnipesBoard(seasonKey);
+  }
   renderBingoBoard();
 
   const hasAnyContent = seasonGroups.some(({ key }) => {
@@ -2032,10 +2241,11 @@ function renderTrophies(seasonKey) {
 }
 
 async function loadTrackerData() {
-  const [trophyResponse, matchupResponse, draftClassResponse, historyTrophyResponse, historyMatchupResponse, historyDraftClassResponse] = await Promise.all([
+  const [trophyResponse, matchupResponse, draftClassResponse, faPlayerStatsResponse, historyTrophyResponse, historyMatchupResponse, historyDraftClassResponse] = await Promise.all([
     fetch(trophyDataUrl, { cache: "no-store" }).catch(() => ({ ok: false, status: 0 })),
     fetch(matchupDataUrl, { cache: "no-store" }).catch(() => ({ ok: false, status: 0 })),
     fetch(draftClassDataUrl, { cache: "no-store" }).catch(() => ({ ok: false, status: 0 })),
+    fetch(faPlayerStatsDataUrl, { cache: "no-store" }).catch(() => ({ ok: false, status: 0 })),
     fetch(trophyHistoryDataUrl, { cache: "no-store" }).catch(() => ({ ok: false, status: 0 })),
     fetch(matchupHistoryDataUrl, { cache: "no-store" }).catch(() => ({ ok: false, status: 0 })),
     fetch(draftClassHistoryDataUrl, { cache: "no-store" }).catch(() => ({ ok: false, status: 0 })),
@@ -2051,9 +2261,11 @@ async function loadTrackerData() {
   trackerData = trophyResponse.ok ? await trophyResponse.json() : { season: {} };
   matchupData = matchupResponse.ok ? await matchupResponse.json() : { season: {} };
   draftClassData = draftClassResponse.ok ? await draftClassResponse.json() : { season: {} };
+  faPlayerStatsData = faPlayerStatsResponse.ok ? await faPlayerStatsResponse.json() : { season: {} };
   historicalTrackerData = historyTrophyResponse.ok ? await historyTrophyResponse.json() : { season: {} };
   historicalMatchupData = historyMatchupResponse.ok ? await historyMatchupResponse.json() : { season: {} };
   historicalDraftClassData = historyDraftClassResponse.ok ? await historyDraftClassResponse.json() : { season: {} };
+  historicalFaPlayerStatsData = { season: {} };
   await loadOwnerConfig();
   await loadLogoConfig();
 
@@ -2061,9 +2273,11 @@ async function loadTrackerData() {
     ...Object.keys(trackerData.season || {}),
     ...Object.keys(matchupData.season || {}),
     ...Object.keys(draftClassData.season || {}),
+    ...Object.keys(faPlayerStatsData.season || {}),
     ...Object.keys(historicalTrackerData.season || {}),
     ...Object.keys(historicalMatchupData.season || {}),
     ...Object.keys(historicalDraftClassData.season || {}),
+    ...Object.keys(historicalFaPlayerStatsData.season || {}),
   ]);
   const seasons = [...seasonSet].sort((a, b) => b.localeCompare(a));
 
@@ -2087,6 +2301,7 @@ async function loadTrackerData() {
 
 seasonSelect.addEventListener("change", (event) => {
   activeMatchupIndex = -1;
+  faSnipesPageIndex = 0;
   renderTrophies(event.target.value);
 });
 
@@ -2098,6 +2313,9 @@ if (tabSeasonLeaderboard) {
 }
 if (tabDraftClass) {
   tabDraftClass.addEventListener("click", () => setTopBoardTab("draft-class"));
+}
+if (tabFaSnipes) {
+  tabFaSnipes.addEventListener("click", () => setTopBoardTab("fa-snipes"));
 }
 if (tabBingoBoard) {
   tabBingoBoard.addEventListener("click", () => setTopBoardTab("bingo"));

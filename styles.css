@@ -838,6 +838,12 @@ select {
   min-width: 0;
 }
 
+.fa-snipes-table {
+  table-layout: fixed;
+  width: auto;
+  min-width: 0;
+}
+
 .matchup-table thead th {
   position: sticky;
   top: 0;
@@ -887,6 +893,15 @@ select {
 .draft-class-table thead th:nth-child(3),
 .draft-class-table tbody td:nth-child(3) {
   left: 72px;
+}
+
+.fa-snipes-table thead th:first-child,
+.fa-snipes-table tbody td:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 3;
+  background: rgba(9, 13, 21, 0.96);
+  color: var(--timestamp-text);
 }
 
 .matchup-table th,
