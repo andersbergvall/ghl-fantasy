@@ -66,6 +66,7 @@ const trophyHistoryDataUrl = window.__GHL_TROPHY_DATA_HISTORY_URL__ || "/trophy-
 const matchupHistoryDataUrl = window.__GHL_MATCHUP_DATA_HISTORY_URL__ || "/matchup-data-history";
 const draftClassHistoryDataUrl = window.__GHL_DRAFT_CLASS_HISTORY_DATA_URL__ || "/drafted-player-stats-history";
 const ownerConfigUrl = window.__GHL_OWNER_CONFIG_URL__ || "archived_years/owner_config.csv";
+const logoConfigUrl = window.__GHL_LOGO_CONFIG_URL__ || "logo_config.csv";
 
 let trackerData = {};
 let matchupData = {};
@@ -74,6 +75,23 @@ let historicalTrackerData = {};
 let historicalMatchupData = {};
 let historicalDraftClassData = {};
 let ownerConfigMap = new Map();
+let teamLogoConfigMap = new Map();
+const fallbackTeamLogoConfigMap = new Map([
+  ["bangkok ladyboys", "https://fantraximg.com/logos/v8q/tmLogo_v8qhbh89k0v0wspm_128.jpg"],
+  ["bonan bonebreakers", "https://fantraximg.com/logos/zmk/tmLogo_zmks50rqmuzvzghv_128.webp"],
+  ["gavle raiders", "https://fantraximg.com/logos/ylw/tmLogo_ylwfh32bl8vr97jm_128.jpg"],
+  ["hagastrom hellraisers", "https://fantraximg.com/logos/eta/tmLogo_eta0noi5l8vpw7nz_128.jpg"],
+  ["rinkeby runners", "https://fantraximg.com/logos/gda/tmLogo_gda3cbcxkmjnp4w2_128.jpg"],
+  ["taipei 101's", "https://fantraximg.com/logos/vuw/tmLogo_vuwpztv7mgqxf48f_128.webp"],
+  ["taipei 101s", "https://fantraximg.com/logos/vuw/tmLogo_vuwpztv7mgqxf48f_128.webp"],
+  ["tessin bourbons", "https://fantraximg.com/logos/0km/tmLogo_0kmgqgikmgc8mips_128.webp"],
+  ["tuna tacos", "https://fantraximg.com/logos/300/tmLogo_300hp7jwk0vfhi51_128.jpg"],
+  ["valhalla valkyries", "https://fantraximg.com/logos/1zl/tmLogo_1zlsvqy1muzw1wit_128.webp"],
+  ["vastermalm frogs", "https://fantraximg.com/logos/p5s/tmLogo_p5s9mklymgcaf8ob_128.webp"],
+  ["wan chai oysters", "https://fantraximg.com/logos/2xz/tmLogo_2xzxrasemgcalrpp_128.webp"],
+  ["omalm golden bananas", "https://fantraximg.com/logos/0el/tmLogo_0elr7dv8mgcbb3cy_128.webp"],
+  ["ostermalm golden bananas", "https://fantraximg.com/logos/0el/tmLogo_0elr7dv8mgcbb3cy_128.webp"],
+]);
 const fallbackOwnerConfigMap = new Map([
   ["barbeque steamers", "ÖGB"],
   ["brussels belgian blues", "TACO"],
@@ -398,8 +416,9 @@ function renderLeaderboard(seasonKey) {
 
       return b[1].length - a[1].length || a[0].localeCompare(b[0]);
     })
-    .map(([teamName, leads], index) => {
+    .map(([teamName, leads]) => {
       const leadCount = leads.length;
+      const teamLogoUrl = getTeamLogoUrl(teamName);
       const leadList = leads
         .map((lead) => `
           <li class="leaderboard-item">
@@ -412,7 +431,10 @@ function renderLeaderboard(seasonKey) {
       return `
         <article class="leaderboard-entry">
           <button class="leaderboard-row" type="button" aria-expanded="false">
-            <span class="leaderboard-rank">${index + 1}</span>
+            <span class="leaderboard-logo" aria-hidden="true">${teamLogoUrl
+    ? `<img class="leaderboard-logo-image" src="${escapeHtml(teamLogoUrl)}" data-logo-src="${escapeHtml(teamLogoUrl)}" alt="" loading="lazy" decoding="async" />
+               <span class="leaderboard-logo-fallback leaderboard-logo-fallback--hidden"></span>`
+    : '<span class="leaderboard-logo-fallback"></span>'}</span>
             <span class="leaderboard-team-wrap">
               <span class="leaderboard-team">${teamName}</span>
               <span class="leaderboard-team-meta">${leadCount} leading ${leadCount === 1 ? "item" : "items"}</span>
@@ -431,6 +453,33 @@ function renderLeaderboard(seasonKey) {
   leaderboard.innerHTML = rows
     ? rows
     : '<div class="empty-state compact">No leaderboard data.</div>';
+
+  leaderboard.querySelectorAll(".leaderboard-logo-image").forEach((imageElement) => {
+    imageElement.addEventListener("error", () => {
+      if (!(imageElement instanceof HTMLImageElement)) {
+        return;
+      }
+
+      const originalLogoUrl = imageElement.getAttribute("data-logo-src") || "";
+      const alreadyRetried = imageElement.getAttribute("data-proxy-tried") === "1";
+      if (!alreadyRetried && originalLogoUrl) {
+        try {
+          const normalizedUrl = originalLogoUrl.replace(/^https?:\/\//i, "");
+          imageElement.setAttribute("data-proxy-tried", "1");
+          imageElement.src = `https://images.weserv.nl/?url=${encodeURIComponent(normalizedUrl)}`;
+          return;
+        } catch (error) {
+          // Fall through to visual fallback marker.
+        }
+      }
+
+      imageElement.classList.add("leaderboard-logo-image--hidden");
+      const fallbackDot = imageElement.parentElement?.querySelector(".leaderboard-logo-fallback");
+      if (fallbackDot) {
+        fallbackDot.classList.remove("leaderboard-logo-fallback--hidden");
+      }
+    });
+  });
 
   activeLeaderboardRow = null;
 
@@ -1314,6 +1363,32 @@ function parseOwnerConfigCsv(csvText) {
   return entries;
 }
 
+function parseLogoConfigCsv(csvText) {
+  const lines = String(csvText || "").split(/\r?\n/).filter((line) => line.trim());
+  if (!lines.length) {
+    return new Map();
+  }
+
+  const entries = new Map();
+  lines.forEach((line) => {
+    const delimiter = line.includes(";") ? ";" : ",";
+    const columns = line.split(delimiter).map((value) => value.trim().replace(/^"|"$/g, ""));
+    if (columns.length < 2) {
+      return;
+    }
+
+    const teamName = columns[0];
+    const logoUrl = columns[1];
+    if (!teamName || !logoUrl) {
+      return;
+    }
+
+    entries.set(normalizeOwnerKey(teamName), logoUrl);
+  });
+
+  return entries;
+}
+
 function getOwnerConfigUrlCandidates() {
   const candidates = new Set();
   candidates.add(ownerConfigUrl);
@@ -1325,6 +1400,26 @@ function getOwnerConfigUrlCandidates() {
     const versionMatch = String(ownerConfigUrl).match(/[?&]v=([^&]+)/);
     const version = versionMatch ? `?v=${encodeURIComponent(versionMatch[1])}` : "";
     candidates.add(`${dataUrl.origin}/archived_years/owner_config.csv${version}`);
+  } catch (error) {
+    // Ignore malformed URLs and proceed with local candidates.
+  }
+
+  return Array.from(candidates);
+}
+
+function getLogoConfigUrlCandidates() {
+  const candidates = new Set();
+  candidates.add(logoConfigUrl);
+  candidates.add("logo_config.csv");
+  candidates.add("/logo_config.csv");
+  candidates.add("archived_years/logo_config.csv");
+  candidates.add("/archived_years/logo_config.csv");
+
+  try {
+    const dataUrl = new URL(trophyDataUrl, window.location.href);
+    const versionMatch = String(logoConfigUrl).match(/[?&]v=([^&]+)/);
+    const version = versionMatch ? `?v=${encodeURIComponent(versionMatch[1])}` : "";
+    candidates.add(`${dataUrl.origin}/logo_config.csv${version}`);
   } catch (error) {
     // Ignore malformed URLs and proceed with local candidates.
   }
@@ -1353,6 +1448,133 @@ async function loadOwnerConfig() {
   } catch (error) {
     ownerConfigMap = new Map(fallbackOwnerConfigMap);
   }
+}
+
+async function loadLogoConfig() {
+  try {
+    const urlCandidates = getLogoConfigUrlCandidates();
+    for (const url of urlCandidates) {
+      const response = await fetch(url, { cache: "no-store" });
+      if (!response.ok) {
+        continue;
+      }
+
+      const text = await response.text();
+      const entries = parseLogoConfigCsv(text);
+      if (entries.size > 0) {
+        teamLogoConfigMap = new Map(fallbackTeamLogoConfigMap);
+        entries.forEach((logoUrl, teamKey) => {
+          teamLogoConfigMap.set(teamKey, logoUrl);
+        });
+        return;
+      }
+    }
+
+    teamLogoConfigMap = new Map(fallbackTeamLogoConfigMap);
+  } catch (error) {
+    teamLogoConfigMap = new Map(fallbackTeamLogoConfigMap);
+  }
+}
+
+function getTeamLogoUrl(teamName) {
+  if (!teamName) {
+    return "";
+  }
+
+  const rawText = String(teamName).trim();
+  const normalized = normalizeOwnerKey(rawText);
+  const normalizedNoSpaces = normalized.replace(/\s+/g, "");
+
+  const findLogoByTeamKey = (teamKey) => {
+    const direct = teamLogoConfigMap.get(teamKey);
+    if (direct) {
+      return direct;
+    }
+    const teamKeyNoSpaces = teamKey.replace(/\s+/g, "");
+    for (const [mapKey, logoUrl] of teamLogoConfigMap.entries()) {
+      if (mapKey === teamKey || mapKey.replace(/\s+/g, "") === teamKeyNoSpaces) {
+        return logoUrl;
+      }
+    }
+    return "";
+  };
+
+  const findLogoByOwnerCode = (ownerCode) => {
+    if (!ownerCode) {
+      return "";
+    }
+    const normalizedOwner = normalizeOwnerKey(ownerCode);
+    const normalizedOwnerNoSpaces = normalizedOwner.replace(/\s+/g, "");
+
+    for (const [teamKey, gmName] of ownerConfigMap.entries()) {
+      const gmKey = normalizeOwnerKey(gmName);
+      if (gmKey === normalizedOwner || gmKey.replace(/\s+/g, "") === normalizedOwnerNoSpaces) {
+        const resolved = findLogoByTeamKey(teamKey);
+        if (resolved) {
+          return resolved;
+        }
+      }
+    }
+
+    for (const [teamKey, gmName] of fallbackOwnerConfigMap.entries()) {
+      const gmKey = normalizeOwnerKey(gmName);
+      if (gmKey === normalizedOwner || gmKey.replace(/\s+/g, "") === normalizedOwnerNoSpaces) {
+        const resolved = findLogoByTeamKey(teamKey);
+        if (resolved) {
+          return resolved;
+        }
+      }
+    }
+
+    return "";
+  };
+
+  const directLogo = teamLogoConfigMap.get(normalized);
+  if (directLogo) {
+    return directLogo;
+  }
+
+  for (const [mapKey, logoUrl] of teamLogoConfigMap.entries()) {
+    if (mapKey === normalized || mapKey.replace(/\s+/g, "") === normalizedNoSpaces) {
+      return logoUrl;
+    }
+  }
+
+  const aliasVariants = [
+    normalized.replace(/golden|bananas/gi, ""),
+    normalized.replace(/gold/gi, ""),
+    normalized.replace(/bananas/gi, ""),
+    normalized.replace(/[^a-z0-9]/gi, ""),
+    normalized.replace(/\s+/g, ""),
+    rawText.toLowerCase().replace(/[^a-z0-9]/gi, ""),
+  ];
+
+  for (const variant of aliasVariants) {
+    const variantKey = normalizeOwnerKey(variant);
+    const resolved = findLogoByTeamKey(variantKey);
+    if (resolved) {
+      return resolved;
+    }
+
+    const resolvedByOwner = findLogoByOwnerCode(variant);
+    if (resolvedByOwner) {
+      return resolvedByOwner;
+    }
+
+    for (const [mapKey, logoUrl] of teamLogoConfigMap.entries()) {
+      const aliasKey = mapKey.replace(/[^a-z0-9]/gi, "");
+      if (aliasKey === variant.replace(/[^a-z0-9]/gi, "")) {
+        return logoUrl;
+      }
+    }
+  }
+
+  const resolvedByOwner = findLogoByOwnerCode(rawText);
+  if (resolvedByOwner) {
+    return resolvedByOwner;
+  }
+
+  return "";
 }
 
 function getOwnerForTeam(teamName) {
@@ -1833,6 +2055,7 @@ async function loadTrackerData() {
   historicalMatchupData = historyMatchupResponse.ok ? await historyMatchupResponse.json() : { season: {} };
   historicalDraftClassData = historyDraftClassResponse.ok ? await historyDraftClassResponse.json() : { season: {} };
   await loadOwnerConfig();
+  await loadLogoConfig();
 
   const seasonSet = new Set([
     ...Object.keys(trackerData.season || {}),
