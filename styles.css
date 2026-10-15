@@ -1565,9 +1565,9 @@ select {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 32px;
-    height: 32px;
-    font-size: 1.08rem;
+    width: 40px;
+    height: 40px;
+    font-size: 1.3rem;
     line-height: 1;
     padding-bottom: 0;
     z-index: 0;
@@ -1587,8 +1587,8 @@ select {
   }
 
   .top-board-tab-icon svg {
-    width: 18px;
-    height: 18px;
+    width: 30px;
+    height: 30px;
   }
 
   .top-board-tab-label {
