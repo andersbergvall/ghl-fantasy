@@ -1101,6 +1101,13 @@ select {
 }
 
 .draft-class-table thead th:nth-child(1),
+.draft-class-table thead th:nth-child(2),
+.draft-class-table thead th:nth-child(3) {
+  top: 0;
+  z-index: 5;
+}
+
+.draft-class-table thead th:nth-child(1),
 .draft-class-table tbody td:nth-child(1) {
   left: 0;
 }
@@ -1122,6 +1129,11 @@ select {
   z-index: 3;
   background: rgba(9, 13, 21, 0.96);
   color: var(--timestamp-text);
+}
+
+.fa-snipes-table thead th:first-child {
+  top: 0;
+  z-index: 5;
 }
 
 .fa-snipes-table thead th:nth-child(2),
