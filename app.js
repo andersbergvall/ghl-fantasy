@@ -72,7 +72,7 @@ const rostersDataUrl = window.__GHL_ROSTERS_DATA_URL__ || "/rosters";
 const trophyHistoryDataUrl = window.__GHL_TROPHY_DATA_HISTORY_URL__ || "/trophy-data-history";
 const matchupHistoryDataUrl = window.__GHL_MATCHUP_DATA_HISTORY_URL__ || "/matchup-data-history";
 const draftClassHistoryDataUrl = window.__GHL_DRAFT_CLASS_HISTORY_DATA_URL__ || "/drafted-player-stats-history";
-const rostersHistoryDataUrl = window.__GHL_ROSTERS_DATA_HISTORY_URL__ || "/rosters-history";
+const rostersHistoryDataUrl = String(window.__GHL_ROSTERS_DATA_HISTORY_URL__ || "").trim();
 const ownerConfigUrl = window.__GHL_OWNER_CONFIG_URL__ || "config/owner_config.csv";
 const logoConfigUrl = window.__GHL_LOGO_CONFIG_URL__ || "config/logo_config.csv";
 
@@ -184,6 +184,7 @@ let tombolaSendPosFilter = "";
 let tombolaGetPosFilter = "";
 let tombolaOutsideClickHandlerBound = false;
 const lineupTargets = { F: 12, D: 4, G: 2 };
+const TOMBOLA_EXHAUSTED_MESSAGE = "All unique suggestions for this exact setup have been shown. Change a filter or team, then draw again.";
 
 function ensureLeaderboardLogoOverlay() {
   if (leaderboardLogoOverlay && leaderboardLogoOverlayImage) {
@@ -563,7 +564,7 @@ function drawTombolaTrade(seasonKey, fromTeamName, toTeamName = "", mode = "fair
 
   const currentCursor = tombolaDrawCursorByKey.get(drawKey) || 0;
   if (proposals.length > 0 && currentCursor >= proposals.length) {
-    tombolaLastEngineMessage = "All unique suggestions for this exact setup have been shown. Change a filter or team, then draw again.";
+    tombolaLastEngineMessage = TOMBOLA_EXHAUSTED_MESSAGE;
     return null;
   }
 
@@ -749,10 +750,13 @@ function renderTombolaBoard(seasonKey) {
     .join("");
 
   const hasFromTeam = !!tombolaFromTeamFilter;
+  const exhaustedMessageClass = tombolaLastEngineMessage === TOMBOLA_EXHAUSTED_MESSAGE
+    ? " tombola-empty-exhausted"
+    : "";
   const outputHtml = tombolaLastSuggestion
     ? renderTombolaSuggestion(tombolaLastSuggestion)
     : tombolaLastEngineMessage
-      ? `<div class="empty-state compact">${escapeHtml(tombolaLastEngineMessage)}</div>`
+      ? `<div class="empty-state compact${exhaustedMessageClass}">${escapeHtml(tombolaLastEngineMessage)}</div>`
       : '<div class="empty-state compact tombola-empty-hint">Select a <strong>From Fantasy Team</strong> and click <strong>Draw!</strong> to generate an analytically ranked trade path.</div>';
   const disableGPosOption = tombolaExcludeGoalies ? "disabled" : "";
 
@@ -3319,6 +3323,10 @@ function renderTrophies(seasonKey) {
 }
 
 async function loadTrackerData() {
+  const rostersHistoryRequest = rostersHistoryDataUrl
+    ? fetch(rostersHistoryDataUrl, { cache: "no-store" }).catch(() => ({ ok: false, status: 0 }))
+    : Promise.resolve({ ok: false, status: 0 });
+
   const [trophyResponse, matchupResponse, draftClassResponse, faPlayerStatsResponse, rostersResponse, historyTrophyResponse, historyMatchupResponse, historyDraftClassResponse, historyRostersResponse] = await Promise.all([
     fetch(trophyDataUrl, { cache: "no-store" }).catch(() => ({ ok: false, status: 0 })),
     fetch(matchupDataUrl, { cache: "no-store" }).catch(() => ({ ok: false, status: 0 })),
@@ -3328,7 +3336,7 @@ async function loadTrackerData() {
     fetch(trophyHistoryDataUrl, { cache: "no-store" }).catch(() => ({ ok: false, status: 0 })),
     fetch(matchupHistoryDataUrl, { cache: "no-store" }).catch(() => ({ ok: false, status: 0 })),
     fetch(draftClassHistoryDataUrl, { cache: "no-store" }).catch(() => ({ ok: false, status: 0 })),
-    fetch(rostersHistoryDataUrl, { cache: "no-store" }).catch(() => ({ ok: false, status: 0 })),
+    rostersHistoryRequest,
   ]);
 
   if (!trophyResponse.ok) {

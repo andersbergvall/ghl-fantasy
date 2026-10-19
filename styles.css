@@ -563,12 +563,16 @@ select {
 }
 
 .tombola-param-label {
+  position: static;
+  display: block;
+  margin: 0;
   font-size: 0.5rem;
   font-weight: 800;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.11em;
   color: var(--muted);
   line-height: 1;
-  padding-left: 1px;
+  text-transform: uppercase;
+  padding: 0;
 }
 
 .tombola-param-box {
@@ -2118,6 +2122,11 @@ body.is-logo-overlay-open {
 
 .tombola-empty-hint {
   font-size: 0.67rem;
+}
+
+.tombola-empty-exhausted {
+  font-size: calc(1em - 6px);
+  line-height: 1.3;
 }
 
 @media (max-width: 720px) {

@@ -8,6 +8,8 @@ The app defaults to loading live JSON from these endpoints:
 
 - `/trophy-data` (reads key `trophy-data`)
 - `/matchup-data` (reads key `matchup-data`)
+- `/rosters` (reads roster payload from the rosters KV namespace)
+- `/rosters-history` (optional; leave unset if historical rosters are not published)
 
 ## Backfill runner
 
