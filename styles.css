@@ -322,20 +322,20 @@ select {
 
 .top-board-tab-icon-ball {
   fill: currentColor;
-  fill-opacity: 0.26;
-  stroke: currentColor;
-  stroke-width: 1.1;
+  fill-opacity: 1;
+  stroke: rgba(225, 240, 255, 0.72);
+  stroke-width: 0.55;
 }
 
 .top-board-tab-icon-ball-inner {
-  fill: rgba(255, 255, 255, 0.32);
+  fill: rgba(9, 13, 21, 0.96);
   stroke: none;
 }
 
 .top-board-tab-icon-ball-letter {
   fill: currentColor;
   stroke: none;
-  font-size: 3.8px;
+  font-size: 3.95px;
   font-family: "Inter", sans-serif;
   font-weight: 800;
 }
@@ -1551,6 +1551,7 @@ select {
   object-fit: cover;
   border-radius: 50%;
   display: block;
+  cursor: zoom-in;
 }
 
 .leaderboard-logo-image--hidden {
@@ -1567,6 +1568,42 @@ select {
 
 .leaderboard-logo-fallback--hidden {
   display: none;
+}
+
+.leaderboard-logo-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 260;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: clamp(18px, 5vw, 52px);
+  background: rgba(3, 7, 18, 0.84);
+  backdrop-filter: blur(7px);
+}
+
+.leaderboard-logo-overlay.is-open {
+  display: flex;
+}
+
+.leaderboard-logo-overlay-surface {
+  width: min(52vw, 260px);
+  height: min(52vw, 260px);
+  max-width: 52vh;
+  max-height: 52vh;
+  display: grid;
+  place-items: center;
+}
+
+.leaderboard-logo-overlay-image {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  filter: drop-shadow(0 20px 34px rgba(0, 0, 0, 0.48));
+}
+
+body.is-logo-overlay-open {
+  overflow: hidden;
 }
 
 .leaderboard-team {

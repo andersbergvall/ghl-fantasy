@@ -158,6 +158,67 @@ let matchupScrollRestoreTimers = [];
 let draftOpenMultiFilter = null;
 let draftOutsideClickHandlerBound = false;
 let faSnipesOutsideClickHandlerBound = false;
+let leaderboardLogoOverlay = null;
+let leaderboardLogoOverlayImage = null;
+
+function ensureLeaderboardLogoOverlay() {
+  if (leaderboardLogoOverlay && leaderboardLogoOverlayImage) {
+    return;
+  }
+
+  leaderboardLogoOverlay = document.createElement("div");
+  leaderboardLogoOverlay.className = "leaderboard-logo-overlay";
+  leaderboardLogoOverlay.setAttribute("aria-hidden", "true");
+  leaderboardLogoOverlay.innerHTML = `
+    <div class="leaderboard-logo-overlay-surface" role="dialog" aria-modal="true" aria-label="Team logo preview">
+      <img class="leaderboard-logo-overlay-image" src="" alt="" />
+    </div>
+  `;
+
+  document.body.appendChild(leaderboardLogoOverlay);
+  leaderboardLogoOverlayImage = leaderboardLogoOverlay.querySelector(".leaderboard-logo-overlay-image");
+
+  leaderboardLogoOverlay.addEventListener("click", (event) => {
+    if (event.target === leaderboardLogoOverlay) {
+      closeLeaderboardLogoOverlay();
+    }
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && leaderboardLogoOverlay?.classList.contains("is-open")) {
+      closeLeaderboardLogoOverlay();
+    }
+  });
+}
+
+function openLeaderboardLogoOverlay(logoUrl, teamName) {
+  if (!logoUrl) {
+    return;
+  }
+
+  ensureLeaderboardLogoOverlay();
+  if (!leaderboardLogoOverlay || !leaderboardLogoOverlayImage) {
+    return;
+  }
+
+  leaderboardLogoOverlayImage.src = logoUrl;
+  leaderboardLogoOverlayImage.alt = `${teamName || "Team"} logo`;
+  leaderboardLogoOverlay.classList.add("is-open");
+  leaderboardLogoOverlay.setAttribute("aria-hidden", "false");
+  document.body.classList.add("is-logo-overlay-open");
+}
+
+function closeLeaderboardLogoOverlay() {
+  if (!leaderboardLogoOverlay || !leaderboardLogoOverlayImage) {
+    return;
+  }
+
+  leaderboardLogoOverlay.classList.remove("is-open");
+  leaderboardLogoOverlay.setAttribute("aria-hidden", "true");
+  leaderboardLogoOverlayImage.src = "";
+  leaderboardLogoOverlayImage.alt = "";
+  document.body.classList.remove("is-logo-overlay-open");
+}
 
 function openSeasonSelectMenu() {
   if (!seasonSelect) {
@@ -427,6 +488,8 @@ function collectLeaderboardLeaders(seasonData) {
 }
 
 function renderLeaderboard(seasonKey) {
+  ensureLeaderboardLogoOverlay();
+
   const seasonPayload = getSeasonPayloadForSource("trophy", seasonKey);
   const seasonData = seasonPayload?.season?.[seasonKey] || {};
   const teamLeads = collectLeaderboardLeaders(seasonData);
@@ -498,6 +561,19 @@ function renderLeaderboard(seasonKey) {
     : '<div class="empty-state compact">No leaderboard data.</div>';
 
   leaderboard.querySelectorAll(".leaderboard-logo-image").forEach((imageElement) => {
+    imageElement.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+
+      if (!(imageElement instanceof HTMLImageElement) || imageElement.classList.contains("leaderboard-logo-image--hidden")) {
+        return;
+      }
+
+      const teamName = imageElement.closest(".leaderboard-row")?.querySelector(".leaderboard-team")?.textContent?.trim() || "Team";
+      const logoUrl = imageElement.getAttribute("data-logo-src") || imageElement.currentSrc || imageElement.src;
+      openLeaderboardLogoOverlay(logoUrl, teamName);
+    });
+
     imageElement.addEventListener("error", () => {
       if (!(imageElement instanceof HTMLImageElement)) {
         return;
