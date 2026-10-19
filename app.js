@@ -41,11 +41,13 @@ const tabSeasonLeaderboard = document.getElementById("tabSeasonLeaderboard");
 const tabDraftClass = document.getElementById("tabDraftClass");
 const tabFaSnipes = document.getElementById("tabFaSnipes");
 const tabBingoBoard = document.getElementById("tabBingoBoard");
+const tabTombolaBoard = document.getElementById("tabTombolaBoard");
 const matchupPane = document.getElementById("matchupPane");
 const leaderboardPane = document.getElementById("leaderboardPane");
 const draftClassPane = document.getElementById("draftClassPane");
 const faSnipesPane = document.getElementById("faSnipesPane");
 const bingoBoardPane = document.getElementById("bingoBoardPane");
+const tombolaPane = document.getElementById("tombolaPane");
 const draftClassTabSeason = document.getElementById("draftClassTabSeason");
 
 const groupLabels = {
@@ -66,9 +68,11 @@ const trophyDataUrl = window.__GHL_TROPHY_DATA_URL__ || "/trophy-data";
 const matchupDataUrl = window.__GHL_MATCHUP_DATA_URL__ || "/matchup-data";
 const draftClassDataUrl = window.__GHL_DRAFT_CLASS_DATA_URL__ || "/drafted-player-stats";
 const faPlayerStatsDataUrl = window.__GHL_FA_PLAYER_STATS_DATA_URL__ || "/fa-player-stats";
+const rostersDataUrl = window.__GHL_ROSTERS_DATA_URL__ || "/rosters";
 const trophyHistoryDataUrl = window.__GHL_TROPHY_DATA_HISTORY_URL__ || "/trophy-data-history";
 const matchupHistoryDataUrl = window.__GHL_MATCHUP_DATA_HISTORY_URL__ || "/matchup-data-history";
 const draftClassHistoryDataUrl = window.__GHL_DRAFT_CLASS_HISTORY_DATA_URL__ || "/drafted-player-stats-history";
+const rostersHistoryDataUrl = window.__GHL_ROSTERS_DATA_HISTORY_URL__ || "/rosters-history";
 const ownerConfigUrl = window.__GHL_OWNER_CONFIG_URL__ || "config/owner_config.csv";
 const logoConfigUrl = window.__GHL_LOGO_CONFIG_URL__ || "config/logo_config.csv";
 
@@ -76,10 +80,12 @@ let trackerData = {};
 let matchupData = {};
 let draftClassData = {};
 let faPlayerStatsData = {};
+let rostersData = {};
 let historicalTrackerData = {};
 let historicalMatchupData = {};
 let historicalDraftClassData = {};
 let historicalFaPlayerStatsData = {};
+let historicalRostersData = {};
 let ownerConfigMap = new Map();
 let teamLogoConfigMap = new Map();
 const fallbackTeamLogoConfigMap = new Map([
@@ -160,6 +166,24 @@ let draftOutsideClickHandlerBound = false;
 let faSnipesOutsideClickHandlerBound = false;
 let leaderboardLogoOverlay = null;
 let leaderboardLogoOverlayImage = null;
+let tombolaFromTeamFilter = "";
+let tombolaToTeamFilter = "";
+let tombolaFromPlayerFilterIds = new Set();
+let tombolaFromPlayerFilterOpen = false;
+let tombolaToPlayerFilterIds = new Set();
+let tombolaToPlayerFilterOpen = false;
+let tombolaLastSuggestion = null;
+let tombolaLastSuggestionSignature = "";
+let tombolaDrawCursorByKey = new Map();
+let tombolaLastEngineMessage = "";
+let tombolaLastSeason = "";
+let tombolaTradeMode = "fair";
+let tombolaSingleTradeOnly = false;
+let tombolaExcludeGoalies = false;
+let tombolaSendPosFilter = "";
+let tombolaGetPosFilter = "";
+let tombolaOutsideClickHandlerBound = false;
+const lineupTargets = { F: 12, D: 4, G: 2 };
 
 function ensureLeaderboardLogoOverlay() {
   if (leaderboardLogoOverlay && leaderboardLogoOverlayImage) {
@@ -263,6 +287,7 @@ function setTopBoardTab(tabKey) {
   const isDraftClass = tabKey === "draft-class";
   const isFaSnipes = tabKey === "fa-snipes";
   const isBingo = tabKey === "bingo";
+  const isTombola = tabKey === "tombola";
 
   if (tabMatchupBoard) {
     tabMatchupBoard.classList.toggle("is-active", isMatchup);
@@ -283,6 +308,10 @@ function setTopBoardTab(tabKey) {
   if (tabBingoBoard) {
     tabBingoBoard.classList.toggle("is-active", isBingo);
     tabBingoBoard.setAttribute("aria-selected", String(isBingo));
+  }
+  if (tabTombolaBoard) {
+    tabTombolaBoard.classList.toggle("is-active", isTombola);
+    tabTombolaBoard.setAttribute("aria-selected", String(isTombola));
   }
   if (matchupPane) {
     matchupPane.hidden = !isMatchup;
@@ -308,6 +337,820 @@ function setTopBoardTab(tabKey) {
       renderBingoBoard();
     }
   }
+  if (tombolaPane) {
+    tombolaPane.hidden = !isTombola;
+    if (isTombola && !!seasonSelect?.value) {
+      renderTombolaBoard(seasonSelect.value);
+    }
+  }
+}
+
+function toFiniteNumber(value, fallback = 0) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : fallback;
+}
+
+function clamp(value, minValue, maxValue) {
+  return Math.max(minValue, Math.min(maxValue, value));
+}
+
+function formatTombolaDraftPick(player) {
+  if (player?.acquisitionLabel) {
+    return player.acquisitionLabel;
+  }
+
+  if (player.pickLabel) {
+    return player.pickLabel;
+  }
+
+  if (!Number.isFinite(player.pick)) {
+    return player.source === "FA" ? "FA" : "UND";
+  }
+
+  return `PK${Math.round(player.pick)}`;
+}
+
+function formatTombolaPlayerFilterName(playerName) {
+  const rawName = String(playerName || "").trim();
+  if (!rawName || rawName.includes(".")) {
+    return rawName;
+  }
+
+  const parts = rawName.split(/\s+/).filter(Boolean);
+  if (parts.length < 2) {
+    return rawName;
+  }
+
+  const firstInitial = parts[0].charAt(0).toUpperCase();
+  const surname = parts[parts.length - 1];
+  return `${firstInitial}. ${surname}`;
+}
+
+function getTombolaPlayerDisplayLabel(player) {
+  return `${formatTombolaPlayerFilterName(player.name)} (${player.fpg.toFixed(2)})`;
+}
+
+function sortTombolaPlayersForFilter(players) {
+  return [...(players || [])].sort((left, right) => {
+    const leftPick = Number.isFinite(left?.pick) ? left.pick : NaN;
+    const rightPick = Number.isFinite(right?.pick) ? right.pick : NaN;
+    const leftHasPick = Number.isFinite(leftPick) && leftPick > 0;
+    const rightHasPick = Number.isFinite(rightPick) && rightPick > 0;
+
+    if (leftHasPick && rightHasPick && leftPick !== rightPick) {
+      return leftPick - rightPick;
+    }
+    if (leftHasPick !== rightHasPick) {
+      return leftHasPick ? -1 : 1;
+    }
+
+    const leftFpg = Number.isFinite(left?.fpg) ? left.fpg : -Infinity;
+    const rightFpg = Number.isFinite(right?.fpg) ? right.fpg : -Infinity;
+    if (rightFpg !== leftFpg) {
+      return rightFpg - leftFpg;
+    }
+
+    return String(left?.name || "").localeCompare(String(right?.name || ""));
+  });
+}
+
+function createTombolaTradeSignature(candidate) {
+  if (!candidate) {
+    return "";
+  }
+
+  const outgoing = (candidate.outgoingPlayers || []).map((player) => String(player.uniqueId || player.id || "")).sort().join(",");
+  const incoming = (candidate.incomingPlayers || []).map((player) => String(player.uniqueId || player.id || "")).sort().join(",");
+  return `${candidate.fromTeamName || ""}|${candidate.toTeamName || ""}|${outgoing}|${incoming}`;
+}
+
+function createTombolaDrawKey(seasonKey, fromTeamName, toTeamName, mode, singleTradeOnly, fixedOutgoingPlayerIds, fixedIncomingPlayerIds, excludeGoalies, sendPosFilter, getPosFilter) {
+  const outgoingIds = [...(fixedOutgoingPlayerIds || [])].map((value) => String(value)).sort().join(",");
+  const incomingIds = [...(fixedIncomingPlayerIds || [])].map((value) => String(value)).sort().join(",");
+  return [
+    String(seasonKey || ""),
+    String(fromTeamName || ""),
+    String(toTeamName || ""),
+    String(mode || "fair"),
+    String(!!singleTradeOnly),
+    String(!!excludeGoalies),
+    String(sendPosFilter || ""),
+    String(getPosFilter || ""),
+    outgoingIds,
+    incomingIds,
+  ].join("|");
+}
+
+function randomChoiceWeighted(items, weightFn) {
+  if (!items.length) {
+    return null;
+  }
+
+  const weighted = items.map((item) => ({
+    item,
+    weight: Math.max(0.0001, toFiniteNumber(weightFn(item), 0.0001)),
+  }));
+  const totalWeight = weighted.reduce((sum, entry) => sum + entry.weight, 0);
+  if (!totalWeight) {
+    return items[Math.floor(Math.random() * items.length)];
+  }
+
+  let cursor = Math.random() * totalWeight;
+  for (const entry of weighted) {
+    cursor -= entry.weight;
+    if (cursor <= 0) {
+      return entry.item;
+    }
+  }
+
+  return weighted[weighted.length - 1].item;
+}
+
+function weightedSampleWithoutReplacement(items, count, weightFn) {
+  const pool = [...items];
+  const picks = [];
+  while (pool.length && picks.length < count) {
+    const selected = randomChoiceWeighted(pool, weightFn);
+    if (!selected) {
+      break;
+    }
+
+    picks.push(selected);
+    const index = pool.indexOf(selected);
+    if (index >= 0) {
+      pool.splice(index, 1);
+    }
+  }
+  return picks;
+}
+
+function normalizeTombolaPlayerKey(value) {
+  return String(value || "")
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/gi, "")
+    .toLowerCase();
+}
+
+function getTombolaPosBucket(value) {
+  const normalized = String(value || "").toUpperCase();
+  if (normalized.includes("G")) {
+    return "G";
+  }
+  if (normalized.includes("D")) {
+    return "D";
+  }
+  return "F";
+}
+
+function getTombolaTeamPools(seasonKey) {
+  const engine = window.TradeEngine;
+  if (!engine || typeof engine.buildContext !== "function") {
+    return { allPlayers: [], teamMap: new Map(), teamProfiles: new Map(), lineupTargets };
+  }
+
+  const rosterRows = getRosterRows(seasonKey);
+  const freeAgentRows = getFaSnipesRows(seasonKey);
+  return engine.buildContext({
+    rosterRows,
+    freeAgentRows,
+    lineupTargets,
+    config: {
+      maxOutputProposals: 30,
+    },
+  });
+}
+
+function drawTombolaTrade(seasonKey, fromTeamName, toTeamName = "", mode = "fair", singleTradeOnly = false, fixedOutgoingPlayerIds = new Set(), fixedIncomingPlayerIds = new Set(), excludeGoalies = false, sendPosFilter = "", getPosFilter = "") {
+  const engine = window.TradeEngine;
+  if (!engine || typeof engine.buildContext !== "function" || typeof engine.generateProposals !== "function") {
+    tombolaLastEngineMessage = "Trade engine failed to initialize.";
+    return null;
+  }
+
+  const context = getTombolaTeamPools(seasonKey);
+  const result = engine.generateProposals(context, {
+    fromTeamName,
+    toTeamName,
+    mode,
+    singleTradeOnly,
+    fixedOutgoingIds: fixedOutgoingPlayerIds,
+    fixedIncomingIds: fixedIncomingPlayerIds,
+    excludeGoalies,
+    sendPosFilter,
+    getPosFilter,
+  });
+
+  const proposals = Array.isArray(result?.proposals) ? result.proposals : [];
+  tombolaLastEngineMessage = String(result?.reason || "").trim();
+
+  if (!proposals.length) {
+    return null;
+  }
+
+  const drawKey = createTombolaDrawKey(
+    seasonKey,
+    fromTeamName,
+    toTeamName,
+    mode,
+    singleTradeOnly,
+    fixedOutgoingPlayerIds,
+    fixedIncomingPlayerIds,
+    excludeGoalies,
+    sendPosFilter,
+    getPosFilter
+  );
+
+  const currentCursor = tombolaDrawCursorByKey.get(drawKey) || 0;
+  if (proposals.length > 0 && currentCursor >= proposals.length) {
+    tombolaLastEngineMessage = "All unique suggestions for this exact setup have been shown. Change a filter or team, then draw again.";
+    return null;
+  }
+
+  const nextSuggestion = proposals[currentCursor] || proposals[0];
+  tombolaDrawCursorByKey.set(drawKey, currentCursor + 1);
+  return nextSuggestion;
+}
+
+function renderTombolaPlayerList(players) {
+  return players
+    .map((player) => {
+      const pickText = formatTombolaDraftPick(player);
+      const ageText = Number.isFinite(player.age) && player.age > 0 ? `Age ${Math.round(player.age)}` : "Age --";
+      return `
+        <li class="tombola-player-item">
+          <span class="tombola-player-name">${escapeHtml(player.name)}</span>
+          <span class="tombola-player-meta">${escapeHtml(player.pos)} | FP/G ${player.fpg.toFixed(2)} | ${escapeHtml(ageText)} | ${escapeHtml(pickText)}</span>
+        </li>
+      `;
+    })
+    .join("");
+}
+
+function renderTombolaSuggestion(result) {
+  if (!result) {
+    const message = tombolaLastEngineMessage || "No qualifying trade path found for this draw. Try a different destination team or draw again.";
+    return `<div class="empty-state compact">${escapeHtml(message)}</div>`;
+  }
+
+  const scoreBadge = (label, score) => `<span class="tombola-score-pill"><strong>${label}</strong> ${Math.round(score * 100)}</span>`;
+
+  return `
+    <div class="tombola-result-card">
+      <div class="tombola-result-header">
+        <p class="eyebrow">Suggested Trade Path</p>
+        <h4 class="tombola-result-title">${escapeHtml(result.fromTeamName)} <span>↔</span> ${escapeHtml(result.toTeamName)} ${result.structure ? `<small>(${escapeHtml(result.structure)})</small>` : ""}</h4>
+      </div>
+      <div class="tombola-score-row">
+        ${scoreBadge("Composite", result.scoring.composite)}
+        ${scoreBadge("Fit", result.scoring.fitScore)}
+        ${scoreBadge("Fairness", result.scoring.fairness)}
+        ${scoreBadge("From Edge", clamp((result.scoring.fromAdvantageRatio + 1) / 2, 0, 1))}
+        ${scoreBadge("Upside", result.scoring.upsideScore)}
+      </div>
+      <div class="tombola-trade-grid">
+        <section class="tombola-trade-side">
+          <h5>${escapeHtml(result.fromTeamName)} sends</h5>
+          <ul>${renderTombolaPlayerList(result.outgoingPlayers)}</ul>
+        </section>
+        <section class="tombola-trade-side">
+          <h5>${escapeHtml(result.fromTeamName)} receives</h5>
+          <ul>${renderTombolaPlayerList(result.incomingPlayers)}</ul>
+        </section>
+      </div>
+      <ul class="tombola-rationale-list">
+        ${result.rationale.map((line) => `<li>${escapeHtml(line)}</li>`).join("")}
+      </ul>
+    </div>
+  `;
+}
+
+function renderTombolaBoard(seasonKey) {
+  if (!tombolaPane) {
+    return;
+  }
+
+  const pools = getTombolaTeamPools(seasonKey);
+  const teamNames = [...pools.teamMap.keys()].sort((left, right) => left.localeCompare(right));
+
+  if (tombolaLastSeason !== seasonKey) {
+    tombolaLastSeason = seasonKey;
+    tombolaLastSuggestion = null;
+    tombolaLastSuggestionSignature = "";
+    tombolaDrawCursorByKey = new Map();
+    tombolaFromTeamFilter = "";
+    tombolaToTeamFilter = "";
+    tombolaFromPlayerFilterIds = new Set();
+    tombolaFromPlayerFilterOpen = false;
+    tombolaToPlayerFilterIds = new Set();
+    tombolaToPlayerFilterOpen = false;
+    tombolaTradeMode = "fair";
+    tombolaSingleTradeOnly = false;
+    tombolaExcludeGoalies = false;
+    tombolaSendPosFilter = "";
+    tombolaGetPosFilter = "";
+    tombolaLastEngineMessage = "";
+  }
+
+  if (tombolaFromTeamFilter && !teamNames.includes(tombolaFromTeamFilter)) {
+    tombolaFromTeamFilter = "";
+    tombolaLastSuggestion = null;
+    tombolaLastSuggestionSignature = "";
+    tombolaFromPlayerFilterIds = new Set();
+    tombolaFromPlayerFilterOpen = false;
+    tombolaToPlayerFilterIds = new Set();
+    tombolaToPlayerFilterOpen = false;
+  }
+  if (tombolaToTeamFilter && !teamNames.includes(tombolaToTeamFilter)) {
+    tombolaToTeamFilter = "";
+    tombolaLastSuggestion = null;
+    tombolaLastSuggestionSignature = "";
+    tombolaToPlayerFilterIds = new Set();
+    tombolaToPlayerFilterOpen = false;
+  }
+  if (tombolaToTeamFilter && tombolaToTeamFilter === tombolaFromTeamFilter) {
+    tombolaToTeamFilter = "";
+    tombolaLastSuggestion = null;
+    tombolaLastSuggestionSignature = "";
+    tombolaToPlayerFilterIds = new Set();
+    tombolaToPlayerFilterOpen = false;
+  }
+
+  const fromTeamPlayers = tombolaFromTeamFilter
+    ? sortTombolaPlayersForFilter(pools.teamProfiles.get(tombolaFromTeamFilter)?.players || [])
+    : [];
+  const toTeamPlayers = tombolaToTeamFilter
+    ? sortTombolaPlayersForFilter(pools.teamProfiles.get(tombolaToTeamFilter)?.players || [])
+    : [];
+
+  const validPlayerIds = new Set(fromTeamPlayers.map((player) => player.id));
+  tombolaFromPlayerFilterIds = new Set([...tombolaFromPlayerFilterIds].filter((playerId) => validPlayerIds.has(playerId)));
+  const validToPlayerIds = new Set(toTeamPlayers.map((player) => player.id));
+  tombolaToPlayerFilterIds = new Set([...tombolaToPlayerFilterIds].filter((playerId) => validToPlayerIds.has(playerId)));
+
+  if (tombolaExcludeGoalies) {
+    const nonGoalieFromIds = new Set(fromTeamPlayers.filter((player) => player.pos !== "G").map((player) => player.id));
+    const nonGoalieToIds = new Set(toTeamPlayers.filter((player) => player.pos !== "G").map((player) => player.id));
+    tombolaFromPlayerFilterIds = new Set([...tombolaFromPlayerFilterIds].filter((playerId) => nonGoalieFromIds.has(playerId)));
+    tombolaToPlayerFilterIds = new Set([...tombolaToPlayerFilterIds].filter((playerId) => nonGoalieToIds.has(playerId)));
+    if (tombolaSendPosFilter === "G") {
+      tombolaSendPosFilter = "";
+    }
+    if (tombolaGetPosFilter === "G") {
+      tombolaGetPosFilter = "";
+    }
+  }
+
+  const playerFilterSummary = tombolaFromTeamFilter
+    ? `${tombolaFromPlayerFilterIds.size} selected`
+    : "Optional";
+  const toPlayerFilterSummary = tombolaToTeamFilter
+    ? `${tombolaToPlayerFilterIds.size} selected`
+    : "Optional";
+  const fromPlayerSummaryText = tombolaFromPlayerFilterIds.size ? `Selected (${playerFilterSummary})` : "Select (Optional)";
+  const toPlayerSummaryText = tombolaToPlayerFilterIds.size ? `Selected (${toPlayerFilterSummary})` : "Select (Optional)";
+
+  const playerOptions = fromTeamPlayers.length
+    ? fromTeamPlayers.map((player) => {
+        const checked = tombolaFromPlayerFilterIds.has(player.id) ? "checked" : "";
+        const disabled = tombolaExcludeGoalies && player.pos === "G" ? "disabled" : "";
+        const disabledClass = tombolaExcludeGoalies && player.pos === "G" ? " is-disabled" : "";
+        return `
+          <label class="draft-multi-option tombola-player-option${disabledClass}">
+            <input type="checkbox" data-tombola-from-player="${escapeHtml(player.id)}" value="${escapeHtml(player.id)}" ${checked} ${disabled} />
+            <span>${escapeHtml(getTombolaPlayerDisplayLabel(player))}</span>
+          </label>
+        `;
+      }).join("")
+    : `<div class="tombola-player-empty">${escapeHtml(playerFilterSummary)}</div>`;
+
+  const toPlayerOptions = tombolaToTeamFilter && toTeamPlayers.length
+    ? toTeamPlayers.map((player) => {
+        const checked = tombolaToPlayerFilterIds.has(player.id) ? "checked" : "";
+        const disabled = tombolaExcludeGoalies && player.pos === "G" ? "disabled" : "";
+        const disabledClass = tombolaExcludeGoalies && player.pos === "G" ? " is-disabled" : "";
+        return `
+          <label class="draft-multi-option tombola-player-option${disabledClass}">
+            <input type="checkbox" data-tombola-to-player="${escapeHtml(player.id)}" value="${escapeHtml(player.id)}" ${checked} ${disabled} />
+            <span>${escapeHtml(getTombolaPlayerDisplayLabel(player))}</span>
+          </label>
+        `;
+      }).join("")
+    : `<div class="tombola-player-empty">${escapeHtml(toPlayerFilterSummary)}</div>`;
+
+  const fromOptions = [`<option value="">Select team</option>`]
+    .concat(teamNames.map((teamName) => `<option value="${escapeHtml(teamName)}" ${tombolaFromTeamFilter === teamName ? "selected" : ""}>${escapeHtml(teamName)}</option>`))
+    .join("");
+
+  const toOptions = [`<option value="">Any team (auto fit)</option>`]
+    .concat(teamNames
+      .filter((teamName) => teamName !== tombolaFromTeamFilter)
+      .map((teamName) => `<option value="${escapeHtml(teamName)}" ${tombolaToTeamFilter === teamName ? "selected" : ""}>${escapeHtml(teamName)}</option>`))
+    .join("");
+
+  const hasFromTeam = !!tombolaFromTeamFilter;
+  const outputHtml = tombolaLastSuggestion
+    ? renderTombolaSuggestion(tombolaLastSuggestion)
+    : tombolaLastEngineMessage
+      ? `<div class="empty-state compact">${escapeHtml(tombolaLastEngineMessage)}</div>`
+      : '<div class="empty-state compact tombola-empty-hint">Select a <strong>From Fantasy Team</strong> and click <strong>Draw!</strong> to generate an analytically ranked trade path.</div>';
+  const disableGPosOption = tombolaExcludeGoalies ? "disabled" : "";
+
+  tombolaPane.innerHTML = `
+    <section class="tombola-board-card">
+      <div class="tombola-board-header">
+        <p class="eyebrow">Trade Tombola</p>
+      </div>
+      <div class="draft-class-toolbar tombola-controls">
+        <div class="tombola-options-row">
+          <div class="tombola-param-block tombola-param-block-send">
+            <span class="tombola-param-label">SEND</span>
+            <fieldset class="tombola-pos-radio-group tombola-param-box ${tombolaExcludeGoalies ? "is-goalie-excluded" : ""}" aria-label="Send position filter">
+              <label class="tombola-pos-radio-option">
+                <input type="checkbox" value="F" ${tombolaSendPosFilter === "F" ? "checked" : ""} data-tombola-send-pos-filter />
+                <span>F</span>
+              </label>
+              <label class="tombola-pos-radio-option">
+                <input type="checkbox" value="D" ${tombolaSendPosFilter === "D" ? "checked" : ""} data-tombola-send-pos-filter />
+                <span>D</span>
+              </label>
+              <label class="tombola-pos-radio-option ${tombolaExcludeGoalies ? "is-disabled" : ""}">
+                <input type="checkbox" value="G" ${tombolaSendPosFilter === "G" ? "checked" : ""} ${disableGPosOption} data-tombola-send-pos-filter />
+                <span>G</span>
+              </label>
+            </fieldset>
+          </div>
+          <div class="tombola-param-block tombola-param-block-get">
+            <span class="tombola-param-label">GET</span>
+            <fieldset class="tombola-pos-radio-group tombola-param-box ${tombolaExcludeGoalies ? "is-goalie-excluded" : ""}" aria-label="Get position filter">
+              <label class="tombola-pos-radio-option">
+                <input type="checkbox" value="F" ${tombolaGetPosFilter === "F" ? "checked" : ""} data-tombola-get-pos-filter />
+                <span>F</span>
+              </label>
+              <label class="tombola-pos-radio-option">
+                <input type="checkbox" value="D" ${tombolaGetPosFilter === "D" ? "checked" : ""} data-tombola-get-pos-filter />
+                <span>D</span>
+              </label>
+              <label class="tombola-pos-radio-option ${tombolaExcludeGoalies ? "is-disabled" : ""}">
+                <input type="checkbox" value="G" ${tombolaGetPosFilter === "G" ? "checked" : ""} ${disableGPosOption} data-tombola-get-pos-filter />
+                <span>G</span>
+              </label>
+            </fieldset>
+          </div>
+        </div>
+        <div class="tombola-filter-row tombola-filter-row-from">
+          <label class="draft-class-filter-group tombola-control-group tombola-team-filter-group">
+            <span class="filter-group-label">From Fantasy Team *</span>
+            <div class="draft-class-select-wrap">
+              <select id="tombolaFromTeamSelect" class="draft-class-select tombola-select">${fromOptions}</select>
+            </div>
+          </label>
+          <label class="draft-class-filter-group tombola-control-group tombola-player-filter-group">
+            <span class="filter-group-label">FROM Players</span>
+            <details class="draft-multi-select tombola-player-select" data-tombola-from-player-filter ${tombolaFromTeamFilter && tombolaFromPlayerFilterOpen ? "open" : ""}>
+              <summary class="draft-multi-summary">${fromPlayerSummaryText}</summary>
+              <div class="draft-multi-menu">
+                ${playerOptions}
+                <div class="tombola-player-menu-actions">
+                  <button type="button" class="tombola-player-clear-btn" data-tombola-clear-from-players>Clear</button>
+                </div>
+              </div>
+            </details>
+          </label>
+        </div>
+        <div class="tombola-filter-row tombola-filter-row-to">
+          <label class="draft-class-filter-group tombola-control-group tombola-team-filter-group">
+            <span class="filter-group-label">To Fantasy Team</span>
+            <div class="draft-class-select-wrap">
+              <select id="tombolaToTeamSelect" class="draft-class-select tombola-select">${toOptions}</select>
+            </div>
+          </label>
+          <label class="draft-class-filter-group tombola-control-group tombola-player-filter-group">
+            <span class="filter-group-label">TO Players</span>
+            <details class="draft-multi-select tombola-player-select" data-tombola-to-player-filter ${tombolaToTeamFilter && tombolaToPlayerFilterOpen ? "open" : ""}>
+              <summary class="draft-multi-summary">${toPlayerSummaryText}</summary>
+              <div class="draft-multi-menu">
+                ${toPlayerOptions}
+                <div class="tombola-player-menu-actions">
+                  <button type="button" class="tombola-player-clear-btn" data-tombola-clear-to-players>Clear</button>
+                </div>
+              </div>
+            </details>
+          </label>
+        </div>
+        <div class="tombola-filter-row tombola-filter-row-actions">
+          <div class="tombola-param-block tombola-param-block-mode">
+            <span class="tombola-param-label">MODE</span>
+            <fieldset class="tombola-param-box tombola-analytics-options" role="radiogroup" aria-label="Tombola trade mode">
+              <label class="tombola-mode-option">
+                <input id="tombolaModeFair" type="radio" name="tombolaTradeMode" value="fair" ${tombolaTradeMode === "fair" ? "checked" : ""} />
+                <span>Fair</span>
+              </label>
+              <label class="tombola-mode-option">
+                <input id="tombolaModeFleece" type="radio" name="tombolaTradeMode" value="fleece" ${tombolaTradeMode === "fleece" ? "checked" : ""} />
+                <span>Fleece</span>
+              </label>
+            </fieldset>
+          </div>
+          <div class="tombola-param-block tombola-param-block-limits">
+            <span class="tombola-param-label">LIMITS</span>
+            <fieldset class="tombola-param-box tombola-limits-options" aria-label="Tombola limits options">
+              <label class="tombola-single-option">
+                <input id="tombolaSingleOnly" type="checkbox" ${tombolaSingleTradeOnly ? "checked" : ""} />
+                <span>1:1 Trade Only</span>
+              </label>
+              <label class="tombola-single-option tombola-exclude-g-option">
+                <input id="tombolaExcludeG" type="checkbox" ${tombolaExcludeGoalies ? "checked" : ""} />
+                <span>Exclude G</span>
+              </label>
+            </fieldset>
+          </div>
+          <div class="draft-class-filter-group tombola-control-group tombola-draw-wrap tombola-draw-wrap--actions">
+            <span class="filter-group-label">&nbsp;</span>
+            <button id="tombolaDrawBtn" class="tombola-draw-btn" type="button" ${hasFromTeam ? "" : "disabled"}>Draw!</button>
+          </div>
+        </div>
+      </div>
+      <div class="tombola-output">${outputHtml}</div>
+    </section>
+  `;
+
+  const fromSelect = tombolaPane.querySelector("#tombolaFromTeamSelect");
+  const toSelect = tombolaPane.querySelector("#tombolaToTeamSelect");
+  const fairModeInput = tombolaPane.querySelector("#tombolaModeFair");
+  const fleeceModeInput = tombolaPane.querySelector("#tombolaModeFleece");
+  const singleOnlyInput = tombolaPane.querySelector("#tombolaSingleOnly");
+  const excludeGInput = tombolaPane.querySelector("#tombolaExcludeG");
+  const sendPosFilterInputs = tombolaPane.querySelectorAll("[data-tombola-send-pos-filter]");
+  const getPosFilterInputs = tombolaPane.querySelectorAll("[data-tombola-get-pos-filter]");
+  const drawButton = tombolaPane.querySelector("#tombolaDrawBtn");
+  const outputNode = tombolaPane.querySelector(".tombola-output");
+  const fromSummaryEl = tombolaPane.querySelector("[data-tombola-from-player-filter] .draft-multi-summary");
+  const toSummaryEl = tombolaPane.querySelector("[data-tombola-to-player-filter] .draft-multi-summary");
+
+  const getSummaryText = (selectedCount) => {
+    if (!selectedCount) {
+      return "Select (Optional)";
+    }
+    return `Selected (${selectedCount} selected)`;
+  };
+
+  const clearSuggestionOutput = () => {
+    if (outputNode) {
+      outputNode.innerHTML = '<div class="empty-state compact tombola-empty-hint">Select a <strong>From Fantasy Team</strong> and click <strong>Draw!</strong> to generate an analytically ranked trade path.</div>';
+    }
+  };
+
+  tombolaPane.querySelectorAll("[data-tombola-from-player-filter] .draft-multi-option input").forEach((input) => {
+    input.addEventListener("change", () => {
+      const selectedIds = Array.from(tombolaPane.querySelectorAll("[data-tombola-from-player]:checked"))
+        .map((checkbox) => checkbox.value)
+        .filter(Boolean);
+      if (tombolaSingleTradeOnly && selectedIds.length > 1) {
+        const latest = input.value;
+        tombolaPane.querySelectorAll("[data-tombola-from-player]").forEach((checkbox) => {
+          checkbox.checked = checkbox.value === latest;
+        });
+        tombolaFromPlayerFilterIds = new Set(latest ? [latest] : []);
+      } else {
+        tombolaFromPlayerFilterIds = new Set(selectedIds);
+      }
+      tombolaFromPlayerFilterOpen = true;
+      tombolaLastSuggestion = null;
+      tombolaLastSuggestionSignature = "";
+      tombolaLastEngineMessage = "";
+      if (fromSummaryEl) {
+        fromSummaryEl.textContent = getSummaryText(tombolaFromPlayerFilterIds.size);
+      }
+      clearSuggestionOutput();
+    });
+  });
+
+  tombolaPane.querySelectorAll("[data-tombola-to-player-filter] .draft-multi-option input").forEach((input) => {
+    input.addEventListener("change", () => {
+      const selectedIds = Array.from(tombolaPane.querySelectorAll("[data-tombola-to-player]:checked"))
+        .map((checkbox) => checkbox.value)
+        .filter(Boolean);
+      if (tombolaSingleTradeOnly && selectedIds.length > 1) {
+        const latest = input.value;
+        tombolaPane.querySelectorAll("[data-tombola-to-player]").forEach((checkbox) => {
+          checkbox.checked = checkbox.value === latest;
+        });
+        tombolaToPlayerFilterIds = new Set(latest ? [latest] : []);
+      } else {
+        tombolaToPlayerFilterIds = new Set(selectedIds);
+      }
+      tombolaToPlayerFilterOpen = true;
+      tombolaLastSuggestion = null;
+      tombolaLastSuggestionSignature = "";
+      tombolaLastEngineMessage = "";
+      if (toSummaryEl) {
+        toSummaryEl.textContent = getSummaryText(tombolaToPlayerFilterIds.size);
+      }
+      clearSuggestionOutput();
+    });
+  });
+
+  tombolaPane.querySelectorAll("[data-tombola-from-player-filter]").forEach((detailsElement) => {
+    detailsElement.addEventListener("toggle", () => {
+      tombolaFromPlayerFilterOpen = detailsElement.open;
+    });
+  });
+
+  tombolaPane.querySelectorAll("[data-tombola-to-player-filter]").forEach((detailsElement) => {
+    detailsElement.addEventListener("toggle", () => {
+      tombolaToPlayerFilterOpen = detailsElement.open;
+    });
+  });
+
+  tombolaPane.querySelector("[data-tombola-clear-from-players]")?.addEventListener("click", () => {
+    tombolaFromPlayerFilterIds = new Set();
+    tombolaFromPlayerFilterOpen = true;
+    tombolaLastSuggestion = null;
+    tombolaLastSuggestionSignature = "";
+    tombolaLastEngineMessage = "";
+    tombolaPane.querySelectorAll("[data-tombola-from-player]").forEach((checkbox) => {
+      checkbox.checked = false;
+    });
+    if (fromSummaryEl) {
+      fromSummaryEl.textContent = getSummaryText(0);
+    }
+    clearSuggestionOutput();
+  });
+
+  tombolaPane.querySelector("[data-tombola-clear-to-players]")?.addEventListener("click", () => {
+    tombolaToPlayerFilterIds = new Set();
+    tombolaToPlayerFilterOpen = true;
+    tombolaLastSuggestion = null;
+    tombolaLastSuggestionSignature = "";
+    tombolaLastEngineMessage = "";
+    tombolaPane.querySelectorAll("[data-tombola-to-player]").forEach((checkbox) => {
+      checkbox.checked = false;
+    });
+    if (toSummaryEl) {
+      toSummaryEl.textContent = getSummaryText(0);
+    }
+    clearSuggestionOutput();
+  });
+
+  if (!tombolaOutsideClickHandlerBound) {
+    document.addEventListener("click", (event) => {
+      if (!tombolaPane || tombolaPane.hidden) {
+        return;
+      }
+      if (!(event.target instanceof Element)) {
+        return;
+      }
+      if (event.target.closest("[data-tombola-from-player-filter]") || event.target.closest("[data-tombola-to-player-filter]")) {
+        return;
+      }
+
+      tombolaFromPlayerFilterOpen = false;
+      tombolaToPlayerFilterOpen = false;
+      tombolaPane.querySelectorAll("[data-tombola-from-player-filter], [data-tombola-to-player-filter]").forEach((detailsElement) => {
+        detailsElement.open = false;
+      });
+    });
+    tombolaOutsideClickHandlerBound = true;
+  }
+
+  fromSelect?.addEventListener("change", () => {
+    tombolaFromTeamFilter = fromSelect.value;
+    if (tombolaToTeamFilter === tombolaFromTeamFilter) {
+      tombolaToTeamFilter = "";
+      tombolaToPlayerFilterIds = new Set();
+      tombolaToPlayerFilterOpen = false;
+    }
+    tombolaFromPlayerFilterIds = new Set();
+    tombolaFromPlayerFilterOpen = false;
+    tombolaLastSuggestion = null;
+    tombolaLastSuggestionSignature = "";
+    tombolaLastEngineMessage = "";
+    renderTombolaBoard(seasonKey);
+  });
+
+  toSelect?.addEventListener("change", () => {
+    tombolaToTeamFilter = toSelect.value;
+    tombolaToPlayerFilterIds = new Set();
+    tombolaToPlayerFilterOpen = false;
+    tombolaLastSuggestion = null;
+    tombolaLastSuggestionSignature = "";
+    tombolaLastEngineMessage = "";
+    renderTombolaBoard(seasonKey);
+  });
+
+  fairModeInput?.addEventListener("change", () => {
+    tombolaTradeMode = "fair";
+    tombolaLastSuggestion = null;
+    tombolaLastSuggestionSignature = "";
+    tombolaLastEngineMessage = "";
+    renderTombolaBoard(seasonKey);
+  });
+
+  fleeceModeInput?.addEventListener("change", () => {
+    tombolaTradeMode = "fleece";
+    tombolaLastSuggestion = null;
+    tombolaLastSuggestionSignature = "";
+    tombolaLastEngineMessage = "";
+    renderTombolaBoard(seasonKey);
+  });
+
+  singleOnlyInput?.addEventListener("change", () => {
+    tombolaSingleTradeOnly = !!singleOnlyInput.checked;
+    if (tombolaSingleTradeOnly) {
+      const fromFirst = tombolaFromPlayerFilterIds.values().next().value;
+      const toFirst = tombolaToPlayerFilterIds.values().next().value;
+      tombolaFromPlayerFilterIds = fromFirst ? new Set([fromFirst]) : new Set();
+      tombolaToPlayerFilterIds = toFirst ? new Set([toFirst]) : new Set();
+    }
+    tombolaLastSuggestion = null;
+    tombolaLastSuggestionSignature = "";
+    tombolaLastEngineMessage = "";
+    renderTombolaBoard(seasonKey);
+  });
+
+  excludeGInput?.addEventListener("change", () => {
+    tombolaExcludeGoalies = !!excludeGInput.checked;
+    if (tombolaExcludeGoalies && tombolaSendPosFilter === "G") {
+      tombolaSendPosFilter = "";
+    }
+    if (tombolaExcludeGoalies && tombolaGetPosFilter === "G") {
+      tombolaGetPosFilter = "";
+    }
+    tombolaLastSuggestion = null;
+    tombolaLastSuggestionSignature = "";
+    tombolaLastEngineMessage = "";
+    renderTombolaBoard(seasonKey);
+  });
+
+  sendPosFilterInputs.forEach((input) => {
+    input.addEventListener("change", () => {
+      if (!(input instanceof HTMLInputElement)) {
+        return;
+      }
+
+      if (input.checked) {
+        sendPosFilterInputs.forEach((otherInput) => {
+          if (otherInput !== input && otherInput instanceof HTMLInputElement) {
+            otherInput.checked = false;
+          }
+        });
+        tombolaSendPosFilter = input.value;
+      } else {
+        tombolaSendPosFilter = "";
+      }
+
+      tombolaLastSuggestion = null;
+      tombolaLastSuggestionSignature = "";
+      tombolaLastEngineMessage = "";
+      renderTombolaBoard(seasonKey);
+    });
+  });
+
+  getPosFilterInputs.forEach((input) => {
+    input.addEventListener("change", () => {
+      if (!(input instanceof HTMLInputElement)) {
+        return;
+      }
+
+      if (input.checked) {
+        getPosFilterInputs.forEach((otherInput) => {
+          if (otherInput !== input && otherInput instanceof HTMLInputElement) {
+            otherInput.checked = false;
+          }
+        });
+        tombolaGetPosFilter = input.value;
+      } else {
+        tombolaGetPosFilter = "";
+      }
+
+      tombolaLastSuggestion = null;
+      tombolaLastSuggestionSignature = "";
+      tombolaLastEngineMessage = "";
+      renderTombolaBoard(seasonKey);
+    });
+  });
+
+  drawButton?.addEventListener("click", () => {
+    if (!tombolaFromTeamFilter) {
+      return;
+    }
+
+    // Always run a fresh generation pass with current filters and selections.
+    tombolaLastSuggestion = drawTombolaTrade(
+      seasonKey,
+      tombolaFromTeamFilter,
+      tombolaToTeamFilter,
+      tombolaTradeMode,
+      tombolaSingleTradeOnly,
+      new Set(tombolaFromPlayerFilterIds),
+      new Set(tombolaToPlayerFilterIds),
+      tombolaExcludeGoalies,
+      tombolaSendPosFilter,
+      tombolaGetPosFilter
+    );
+    renderTombolaBoard(seasonKey);
+  });
 }
 
 function formatValue(metric, value) {
@@ -796,6 +1639,60 @@ function getFaSnipesRows(seasonKey) {
   const seasonNode = faSource?.season?.[seasonKey] || {};
   const rows = seasonNode.players || [];
   return Array.isArray(rows) ? rows : [];
+}
+
+function getRosterRows(seasonKey) {
+  const rosterSource = getSeasonPayloadForSource("rosters", seasonKey);
+  const seasonNode = rosterSource?.season?.[seasonKey] || rosterSource?.season || rosterSource || {};
+  const teams = seasonNode.teams || seasonNode.Teams || seasonNode.rosters || seasonNode.Rosters || {};
+  const rows = [];
+
+  if (Array.isArray(seasonNode)) {
+    seasonNode.forEach((row) => {
+      if (row && typeof row === "object") {
+        rows.push(row);
+      }
+    });
+    return rows;
+  }
+
+  if (Array.isArray(teams)) {
+    teams.forEach((teamEntry) => {
+      if (!teamEntry || typeof teamEntry !== "object") {
+        return;
+      }
+      const teamName = String(teamEntry.team || teamEntry.Team || teamEntry.teamName || teamEntry["Fantasy Team"] || "").trim();
+      const players = Array.isArray(teamEntry.players) ? teamEntry.players : Array.isArray(teamEntry.Players) ? teamEntry.Players : [];
+      players.forEach((player) => {
+        if (!player || typeof player !== "object") {
+          return;
+        }
+        rows.push({
+          ...player,
+          teamName: teamName || String(player["Fantasy Team"] || player.team || player.teamName || "").trim(),
+        });
+      });
+    });
+    return rows;
+  }
+
+  Object.entries(teams).forEach(([teamName, teamValue]) => {
+    const players = Array.isArray(teamValue?.players)
+      ? teamValue.players
+      : Array.isArray(teamValue?.Players)
+        ? teamValue.Players
+        : Array.isArray(teamValue)
+          ? teamValue
+          : [];
+    players.forEach((player) => {
+      rows.push({
+        ...player,
+        teamName: teamValue?.team || teamValue?.Team || teamName,
+      });
+    });
+  });
+
+  return rows;
 }
 
 function getFaSnipesCellValue(row, key) {
@@ -2161,6 +3058,7 @@ function getSeasonPayloadForSource(sourceKey, seasonKey) {
     matchup: { active: matchupData, history: historicalMatchupData },
     draft: { active: draftClassData, history: historicalDraftClassData },
     fa: { active: faPlayerStatsData, history: historicalFaPlayerStatsData },
+    rosters: { active: rostersData, history: historicalRostersData },
   };
 
   const targetSource = sourceMap[sourceKey] || { active: {}, history: {} };
@@ -2357,6 +3255,9 @@ function renderTrophies(seasonKey) {
     renderFaSnipesBoard(seasonKey);
   }
   renderBingoBoard();
+  if (tombolaPane) {
+    renderTombolaBoard(seasonKey);
+  }
 
   const hasAnyContent = seasonGroups.some(({ key }) => {
     const bucket = seasonData[key];
@@ -2418,14 +3319,16 @@ function renderTrophies(seasonKey) {
 }
 
 async function loadTrackerData() {
-  const [trophyResponse, matchupResponse, draftClassResponse, faPlayerStatsResponse, historyTrophyResponse, historyMatchupResponse, historyDraftClassResponse] = await Promise.all([
+  const [trophyResponse, matchupResponse, draftClassResponse, faPlayerStatsResponse, rostersResponse, historyTrophyResponse, historyMatchupResponse, historyDraftClassResponse, historyRostersResponse] = await Promise.all([
     fetch(trophyDataUrl, { cache: "no-store" }).catch(() => ({ ok: false, status: 0 })),
     fetch(matchupDataUrl, { cache: "no-store" }).catch(() => ({ ok: false, status: 0 })),
     fetch(draftClassDataUrl, { cache: "no-store" }).catch(() => ({ ok: false, status: 0 })),
     fetch(faPlayerStatsDataUrl, { cache: "no-store" }).catch(() => ({ ok: false, status: 0 })),
+    fetch(rostersDataUrl, { cache: "no-store" }).catch(() => ({ ok: false, status: 0 })),
     fetch(trophyHistoryDataUrl, { cache: "no-store" }).catch(() => ({ ok: false, status: 0 })),
     fetch(matchupHistoryDataUrl, { cache: "no-store" }).catch(() => ({ ok: false, status: 0 })),
     fetch(draftClassHistoryDataUrl, { cache: "no-store" }).catch(() => ({ ok: false, status: 0 })),
+    fetch(rostersHistoryDataUrl, { cache: "no-store" }).catch(() => ({ ok: false, status: 0 })),
   ]);
 
   if (!trophyResponse.ok) {
@@ -2439,10 +3342,12 @@ async function loadTrackerData() {
   matchupData = matchupResponse.ok ? await matchupResponse.json() : { season: {} };
   draftClassData = draftClassResponse.ok ? await draftClassResponse.json() : { season: {} };
   faPlayerStatsData = faPlayerStatsResponse.ok ? await faPlayerStatsResponse.json() : { season: {} };
+  rostersData = rostersResponse.ok ? await rostersResponse.json() : { season: {} };
   historicalTrackerData = historyTrophyResponse.ok ? await historyTrophyResponse.json() : { season: {} };
   historicalMatchupData = historyMatchupResponse.ok ? await historyMatchupResponse.json() : { season: {} };
   historicalDraftClassData = historyDraftClassResponse.ok ? await historyDraftClassResponse.json() : { season: {} };
   historicalFaPlayerStatsData = { season: {} };
+  historicalRostersData = historyRostersResponse.ok ? await historyRostersResponse.json() : { season: {} };
   await loadOwnerConfig();
   await loadLogoConfig();
 
@@ -2451,10 +3356,12 @@ async function loadTrackerData() {
     ...Object.keys(matchupData.season || {}),
     ...Object.keys(draftClassData.season || {}),
     ...Object.keys(faPlayerStatsData.season || {}),
+    ...Object.keys(rostersData.season || {}),
     ...Object.keys(historicalTrackerData.season || {}),
     ...Object.keys(historicalMatchupData.season || {}),
     ...Object.keys(historicalDraftClassData.season || {}),
     ...Object.keys(historicalFaPlayerStatsData.season || {}),
+    ...Object.keys(historicalRostersData.season || {}),
   ]);
   const seasons = [...seasonSet].sort((a, b) => b.localeCompare(a));
 
@@ -2511,6 +3418,9 @@ if (tabFaSnipes) {
 }
 if (tabBingoBoard) {
   tabBingoBoard.addEventListener("click", () => setTopBoardTab("bingo"));
+}
+if (tabTombolaBoard) {
+  tabTombolaBoard.addEventListener("click", () => setTopBoardTab("tombola"));
 }
 
 (async () => {

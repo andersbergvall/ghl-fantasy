@@ -399,6 +399,415 @@ select {
   background: rgba(11, 16, 32, 0.72);
 }
 
+.tombola-board-card {
+  display: grid;
+  gap: 10px;
+  padding: 6px 0 0;
+}
+
+.tombola-board-header {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.tombola-board-meta {
+  color: var(--muted);
+  font-size: 0.72rem;
+  line-height: 1.3;
+}
+
+.draft-class-toolbar.tombola-controls {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+.tombola-filter-row,
+.tombola-options-row {
+  gap: 6px;
+}
+
+.tombola-filter-row {
+  display: grid;
+  align-items: end;
+}
+
+.tombola-options-row {
+  display: grid;
+  grid-template-columns: repeat(2, max-content);
+  align-items: start;
+  justify-content: flex-start;
+}
+
+.tombola-controls .tombola-options-row {
+  order: 1;
+}
+
+.tombola-controls .tombola-filter-row-from {
+  order: 2;
+}
+
+.tombola-controls .tombola-filter-row-to {
+  order: 3;
+}
+
+.tombola-controls .tombola-filter-row-actions {
+  order: 4;
+}
+
+.tombola-control-group {
+  display: grid;
+  gap: 1px;
+  align-items: flex-start;
+  min-width: 0;
+}
+
+.tombola-team-filter-group {
+  min-width: 160px;
+}
+
+.tombola-player-filter-group {
+  min-width: 0;
+}
+
+.tombola-player-filter-group .draft-multi-summary {
+  padding: 3px 5px;
+  font-size: 0.58rem;
+}
+
+.tombola-select {
+  padding: 3px 5px;
+  font-size: 0.58rem;
+}
+
+.tombola-player-select {
+  width: 100%;
+}
+
+.tombola-player-select .draft-multi-summary {
+  min-height: 0;
+}
+
+.tombola-player-select .draft-multi-menu {
+  max-height: 240px;
+  overflow: auto;
+}
+
+.tombola-player-menu-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 4px;
+}
+
+.tombola-player-clear-btn {
+  appearance: none;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  background: rgba(148, 163, 184, 0.08);
+  color: var(--muted);
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 0.5rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+}
+
+.tombola-player-option span {
+  line-height: 1.25;
+}
+
+.tombola-player-option.is-disabled {
+  color: rgba(148, 163, 184, 0.42);
+}
+
+.tombola-player-option.is-disabled input[type="checkbox"] {
+  opacity: 0.45;
+}
+
+.tombola-player-empty {
+  color: var(--muted);
+  font-size: 0.72rem;
+  padding: 4px 2px;
+}
+
+.tombola-analytics-options {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: nowrap;
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  min-height: 18px;
+}
+
+.tombola-limits-options {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: nowrap;
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  min-height: 18px;
+}
+
+.tombola-param-block {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  width: fit-content;
+  justify-self: start;
+}
+
+.tombola-param-label {
+  font-size: 0.5rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  line-height: 1;
+  padding-left: 1px;
+}
+
+.tombola-param-box {
+  margin: 0;
+  padding: 4px 7px;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  border-radius: 8px;
+  min-height: 28px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  line-height: 1;
+  width: fit-content;
+}
+
+.tombola-mode-option,
+.tombola-single-option {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--muted);
+  font-size: 0.58rem;
+  font-weight: 700;
+  line-height: 1;
+  user-select: none;
+}
+
+.tombola-pos-radio-group {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.tombola-pos-radio-option {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 0.56rem;
+  color: var(--muted);
+  font-weight: 700;
+  line-height: 1;
+}
+
+.tombola-pos-radio-option input {
+  margin: 0;
+  accent-color: var(--ice-deep);
+  width: 12px;
+  height: 12px;
+}
+
+.tombola-pos-radio-option.is-disabled {
+  opacity: 0.45;
+}
+
+.tombola-pos-radio-group.is-goalie-excluded {
+  border-color: rgba(148, 163, 184, 0.2);
+}
+
+.tombola-param-block-send .tombola-param-box,
+.tombola-param-block-get .tombola-param-box {
+  padding: 3px 5px;
+  min-height: 24px;
+  gap: 8px;
+}
+
+.tombola-exclude-g-option {
+  margin-left: 0;
+}
+
+.tombola-mode-option input,
+.tombola-single-option input {
+  margin: 0;
+  accent-color: var(--ice-deep);
+  width: 12px;
+  height: 12px;
+}
+
+.tombola-draw-btn {
+  appearance: none;
+  border: 1px solid rgba(125, 182, 255, 0.45);
+  border-radius: 8px;
+  background: rgba(111, 196, 255, 0.18);
+  color: var(--text);
+  font-size: 0.58rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  line-height: 1;
+  min-height: 0;
+  padding: 3px 5px;
+  cursor: pointer;
+  width: 100%;
+}
+
+.tombola-draw-wrap {
+  min-width: 82px;
+}
+
+.tombola-filter-row-from,
+.tombola-filter-row-to {
+  align-items: flex-end;
+}
+
+.tombola-filter-row-from {
+  grid-template-columns: 180px minmax(240px, 340px);
+}
+
+.tombola-filter-row-to {
+  grid-template-columns: 180px minmax(240px, 340px);
+}
+
+.tombola-filter-row-actions {
+  grid-template-columns: max-content max-content 82px;
+  align-items: end;
+  justify-content: flex-start;
+}
+
+.tombola-draw-wrap--actions {
+  align-self: end;
+}
+
+.tombola-draw-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.tombola-output {
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  background: rgba(9, 13, 21, 0.3);
+  border-radius: 12px;
+  padding: 10px;
+}
+
+.tombola-result-card {
+  display: grid;
+  gap: 8px;
+}
+
+.tombola-result-header {
+  display: grid;
+  gap: 1px;
+}
+
+.tombola-result-title {
+  margin: 0;
+  font-size: 0.82rem;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+}
+
+.tombola-result-title span {
+  color: var(--accent);
+}
+
+.tombola-score-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.tombola-score-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  background: rgba(148, 163, 184, 0.08);
+  border-radius: 999px;
+  font-size: 0.58rem;
+  color: var(--text);
+  padding: 2px 7px;
+}
+
+.tombola-score-pill strong {
+  color: var(--ice);
+  font-weight: 800;
+}
+
+.tombola-trade-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 7px;
+}
+
+.tombola-trade-side {
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  border-radius: 10px;
+  background: rgba(17, 26, 43, 0.66);
+  padding: 7px;
+}
+
+.tombola-trade-side h5 {
+  margin: 0 0 5px;
+  font-size: 0.62rem;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--ice);
+}
+
+.tombola-trade-side ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.tombola-player-item {
+  display: grid;
+  gap: 1px;
+  border-radius: 8px;
+  padding: 5px;
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  background: rgba(11, 16, 32, 0.52);
+}
+
+.tombola-player-name {
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: var(--sweater);
+}
+
+.tombola-player-meta {
+  font-size: 0.56rem;
+  color: var(--muted);
+}
+
+.tombola-rationale-list {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 3px;
+}
+
+.tombola-rationale-list li {
+  font-size: 0.6rem;
+  line-height: 1.35;
+  color: var(--table-text);
+}
+
 .bingo-board-table {
   width: max-content;
   min-width: 100%;
@@ -1707,6 +2116,10 @@ body.is-logo-overlay-open {
   padding: 14px 10px;
 }
 
+.tombola-empty-hint {
+  font-size: 0.67rem;
+}
+
 @media (max-width: 720px) {
   .page-shell {
     padding: 16px 12px calc(92px + env(safe-area-inset-bottom));
@@ -1881,7 +2294,7 @@ body.is-logo-overlay-open {
     margin: 0;
     padding: 8px 8px calc(24px + env(safe-area-inset-bottom));
     display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-template-columns: repeat(6, minmax(0, 1fr));
     gap: 6px;
     border-top: 1px solid rgba(148, 163, 184, 0.22);
     background: rgba(9, 13, 21, 0.96);
@@ -1943,9 +2356,52 @@ body.is-logo-overlay-open {
 
   .top-board-tab-label {
     display: block;
-    font-size: 0.62rem;
+    font-size: 0.56rem;
     font-weight: 700;
     letter-spacing: 0.02em;
     white-space: nowrap;
+  }
+
+  .draft-class-toolbar.tombola-controls {
+    gap: 8px;
+  }
+
+  .tombola-filter-row,
+  .tombola-options-row {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+  }
+
+  .tombola-trade-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .tombola-team-filter-group,
+  .tombola-player-filter-group {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .tombola-pos-radio-group,
+  .tombola-param-block,
+  .tombola-draw-wrap {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .tombola-param-box,
+  .tombola-analytics-options,
+  .tombola-limits-options,
+  .tombola-pos-radio-group {
+    flex-wrap: wrap;
+    justify-content: flex-start;
+  }
+
+  .tombola-exclude-g-option {
+    margin-left: 0;
+  }
+
+  .tombola-options-row .tombola-draw-btn {
+    width: 100%;
   }
 }
