@@ -2358,7 +2358,7 @@ def publish_cloudflare_kv_snapshots(
     matchup_key = os.getenv("CLOUDFLARE_KV_KEY_MATCHUP_DATA", "matchup-data").strip() or "matchup-data"
     drafted_key = os.getenv("CLOUDFLARE_KV_KEY_DRAFTED_PLAYER_STATS", "drafted-player-stats").strip() or "drafted-player-stats"
     fa_key = os.getenv("CLOUDFLARE_KV_KEY_FA_PLAYER_STATS", "fa-player-stats").strip() or "fa-player-stats"
-    roster_key = os.getenv("CLOUDFLARE_KV_KEY_ROSTERS", "rosters-data").strip() or "rosters-data"
+    roster_key = os.getenv("CLOUDFLARE_KV_KEY_ROSTERS", "rosters").strip() or "rosters"
 
     if not trophy_namespace_id:
         raise ValueError("Missing CLOUDFLARE_KV_NAMESPACE_ID_TROPHY_DATA in the environment.")
@@ -2386,7 +2386,7 @@ def publish_cloudflare_kv_snapshots(
     if roster_payload is not None:
         if not roster_namespace_id:
             raise ValueError("Missing CLOUDFLARE_KV_NAMESPACE_ID_ROSTERS in the environment.")
-        result["rosters-data"] = patch_cloudflare_kv_value(roster_namespace_id, roster_key, roster_payload)
+        result["rosters"] = patch_cloudflare_kv_value(roster_namespace_id, roster_key, roster_payload)
 
     return result
 

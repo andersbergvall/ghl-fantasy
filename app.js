@@ -178,13 +178,27 @@ let tombolaDrawCursorByKey = new Map();
 let tombolaLastEngineMessage = "";
 let tombolaLastSeason = "";
 let tombolaTradeMode = "fair";
-let tombolaSingleTradeOnly = false;
+let tombolaTradeStructure = "";
 let tombolaExcludeGoalies = false;
 let tombolaSendPosFilter = "";
 let tombolaGetPosFilter = "";
+let tombolaGetPosPlusOne = false;
 let tombolaOutsideClickHandlerBound = false;
 const lineupTargets = { F: 12, D: 4, G: 2 };
 const TOMBOLA_EXHAUSTED_MESSAGE = "All unique suggestions for this exact setup have been shown. Change a filter or team, then draw again.";
+
+function getTombolaStructureLimits(structure) {
+  if (structure === "1:1") {
+    return { outgoing: 1, incoming: 1 };
+  }
+  if (structure === "1:2") {
+    return { outgoing: 1, incoming: 2 };
+  }
+  if (structure === "2:1") {
+    return { outgoing: 2, incoming: 1 };
+  }
+  return null;
+}
 
 function ensureLeaderboardLogoOverlay() {
   if (leaderboardLogoOverlay && leaderboardLogoOverlayImage) {
@@ -388,27 +402,79 @@ function formatTombolaPlayerFilterName(playerName) {
 }
 
 function getTombolaPlayerDisplayLabel(player) {
-  return `${formatTombolaPlayerFilterName(player.name)} (${player.fpg.toFixed(2)})`;
+  const parseDraftRound = (value) => {
+    if (Number.isFinite(value)) {
+      return Number(value);
+    }
+
+    const text = String(value || "").trim();
+    if (!text) {
+      return NaN;
+    }
+
+    const matched = text.match(/\d+/);
+    return matched ? Number(matched[0]) : NaN;
+  };
+
+  const fpgValue = Number.isFinite(player?.fpg) ? player.fpg.toFixed(2) : "--";
+  const draftRound = parseDraftRound(player?.draftRoundRaw ?? player?.draftRound);
+  const isDrafted = Number.isFinite(draftRound) && draftRound > 0 && draftRound !== 999;
+  const draftRoundText = isDrafted ? String(Math.round(draftRound)) : "FA";
+  const playerName = String(player?.name || "Unknown");
+  return `${playerName} | ${draftRoundText} | ${fpgValue}`;
 }
 
 function sortTombolaPlayersForFilter(players) {
+  const getDraftRoundSortValue = (player) => {
+    const parseDraftRound = (value) => {
+      if (Number.isFinite(value)) {
+        return Number(value);
+      }
+
+      const text = String(value || "").trim();
+      if (!text) {
+        return NaN;
+      }
+
+      const matched = text.match(/\d+/);
+      return matched ? Number(matched[0]) : NaN;
+    };
+
+    const round = parseDraftRound(player?.draftRoundRaw ?? player?.draftRound);
+    return Number.isFinite(round) && round > 0 && round !== 999 ? Math.round(round) : Infinity;
+  };
+
   return [...(players || [])].sort((left, right) => {
-    const leftPick = Number.isFinite(left?.pick) ? left.pick : NaN;
-    const rightPick = Number.isFinite(right?.pick) ? right.pick : NaN;
-    const leftHasPick = Number.isFinite(leftPick) && leftPick > 0;
-    const rightHasPick = Number.isFinite(rightPick) && rightPick > 0;
+    const leftRound = getDraftRoundSortValue(left);
+    const rightRound = getDraftRoundSortValue(right);
 
-    if (leftHasPick && rightHasPick && leftPick !== rightPick) {
-      return leftPick - rightPick;
-    }
-    if (leftHasPick !== rightHasPick) {
-      return leftHasPick ? -1 : 1;
+    const leftIsDrafted = Number.isFinite(leftRound) && leftRound !== Infinity;
+    const rightIsDrafted = Number.isFinite(rightRound) && rightRound !== Infinity;
+
+    if (leftIsDrafted && rightIsDrafted) {
+      if (leftRound !== rightRound) {
+        return leftRound - rightRound;
+      }
+
+      const leftFpgDrafted = Number.isFinite(left?.fpg) ? left.fpg : -Infinity;
+      const rightFpgDrafted = Number.isFinite(right?.fpg) ? right.fpg : -Infinity;
+      if (rightFpgDrafted !== leftFpgDrafted) {
+        return rightFpgDrafted - leftFpgDrafted;
+      }
     }
 
-    const leftFpg = Number.isFinite(left?.fpg) ? left.fpg : -Infinity;
-    const rightFpg = Number.isFinite(right?.fpg) ? right.fpg : -Infinity;
-    if (rightFpg !== leftFpg) {
-      return rightFpg - leftFpg;
+    if (leftIsDrafted !== rightIsDrafted) {
+      return leftIsDrafted ? -1 : 1;
+    }
+
+    const leftFpgFa = Number.isFinite(left?.fpg) ? left.fpg : -Infinity;
+    const rightFpgFa = Number.isFinite(right?.fpg) ? right.fpg : -Infinity;
+    if (rightFpgFa !== leftFpgFa) {
+      return rightFpgFa - leftFpgFa;
+    }
+
+    if (leftRound !== rightRound) {
+      return leftRound - rightRound;
     }
 
     return String(left?.name || "").localeCompare(String(right?.name || ""));
@@ -425,7 +491,7 @@ function createTombolaTradeSignature(candidate) {
   return `${candidate.fromTeamName || ""}|${candidate.toTeamName || ""}|${outgoing}|${incoming}`;
 }
 
-function createTombolaDrawKey(seasonKey, fromTeamName, toTeamName, mode, singleTradeOnly, fixedOutgoingPlayerIds, fixedIncomingPlayerIds, excludeGoalies, sendPosFilter, getPosFilter) {
+function createTombolaDrawKey(seasonKey, fromTeamName, toTeamName, mode, tradeStructure, fixedOutgoingPlayerIds, fixedIncomingPlayerIds, excludeGoalies, sendPosFilter, getPosFilter, getPosPlusOne) {
   const outgoingIds = [...(fixedOutgoingPlayerIds || [])].map((value) => String(value)).sort().join(",");
   const incomingIds = [...(fixedIncomingPlayerIds || [])].map((value) => String(value)).sort().join(",");
   return [
@@ -433,10 +499,11 @@ function createTombolaDrawKey(seasonKey, fromTeamName, toTeamName, mode, singleT
     String(fromTeamName || ""),
     String(toTeamName || ""),
     String(mode || "fair"),
-    String(!!singleTradeOnly),
+    String(tradeStructure || ""),
     String(!!excludeGoalies),
     String(sendPosFilter || ""),
     String(getPosFilter || ""),
+    String(!!getPosPlusOne),
     outgoingIds,
     incomingIds,
   ].join("|");
@@ -522,7 +589,7 @@ function getTombolaTeamPools(seasonKey) {
   });
 }
 
-function drawTombolaTrade(seasonKey, fromTeamName, toTeamName = "", mode = "fair", singleTradeOnly = false, fixedOutgoingPlayerIds = new Set(), fixedIncomingPlayerIds = new Set(), excludeGoalies = false, sendPosFilter = "", getPosFilter = "") {
+function drawTombolaTrade(seasonKey, fromTeamName, toTeamName = "", mode = "fair", tradeStructure = "", fixedOutgoingPlayerIds = new Set(), fixedIncomingPlayerIds = new Set(), excludeGoalies = false, sendPosFilter = "", getPosFilter = "", getPosPlusOne = false) {
   const engine = window.TradeEngine;
   if (!engine || typeof engine.buildContext !== "function" || typeof engine.generateProposals !== "function") {
     tombolaLastEngineMessage = "Trade engine failed to initialize.";
@@ -534,12 +601,13 @@ function drawTombolaTrade(seasonKey, fromTeamName, toTeamName = "", mode = "fair
     fromTeamName,
     toTeamName,
     mode,
-    singleTradeOnly,
+    tradeStructure,
     fixedOutgoingIds: fixedOutgoingPlayerIds,
     fixedIncomingIds: fixedIncomingPlayerIds,
     excludeGoalies,
     sendPosFilter,
     getPosFilter,
+    getPosRequirePlusOne: !!getPosPlusOne,
   });
 
   const proposals = Array.isArray(result?.proposals) ? result.proposals : [];
@@ -554,12 +622,13 @@ function drawTombolaTrade(seasonKey, fromTeamName, toTeamName = "", mode = "fair
     fromTeamName,
     toTeamName,
     mode,
-    singleTradeOnly,
+    tradeStructure,
     fixedOutgoingPlayerIds,
     fixedIncomingPlayerIds,
     excludeGoalies,
     sendPosFilter,
-    getPosFilter
+    getPosFilter,
+    getPosPlusOne
   );
 
   const currentCursor = tombolaDrawCursorByKey.get(drawKey) || 0;
@@ -595,6 +664,58 @@ function renderTombolaSuggestion(result) {
   }
 
   const scoreBadge = (label, score) => `<span class="tombola-score-pill"><strong>${label}</strong> ${Math.round(score * 100)}</span>`;
+  const fmt = (value) => {
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric)) {
+      return "0.00";
+    }
+    return numeric.toFixed(2);
+  };
+
+  const fmtDelta = (after, before) => {
+    const delta = Number(after) - Number(before);
+    if (!Number.isFinite(delta) || Math.abs(delta) < 0.005) {
+      return "";
+    }
+    return ` (${delta > 0 ? "+" : ""}${delta.toFixed(2)})`;
+  };
+
+  const myBefore = result?.details?.fromDelta?.beforeState?.lineupByPos || { F: 0, D: 0, G: 0 };
+  const myAfter = result?.details?.fromDelta?.afterState?.lineupByPos || { F: 0, D: 0, G: 0 };
+  const otherBefore = result?.details?.toDelta?.beforeState?.lineupByPos || { F: 0, D: 0, G: 0 };
+  const otherAfter = result?.details?.toDelta?.afterState?.lineupByPos || { F: 0, D: 0, G: 0 };
+
+  const lineupTable = `
+    <div class="tombola-lineup-table-wrap">
+      <p class="tombola-lineup-table-title">Top-Lineup FP/G (After with Delta vs Before)</p>
+      <table class="tombola-lineup-table" aria-label="Top lineup FP/G before and after trade">
+        <thead>
+          <tr>
+            <th></th>
+            <th>MY TEAM</th>
+            <th>OTHER TEAM</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <th>F (Top 12)</th>
+            <td>${fmt(myAfter.F)}${fmtDelta(myAfter.F, myBefore.F)}</td>
+            <td>${fmt(otherAfter.F)}${fmtDelta(otherAfter.F, otherBefore.F)}</td>
+          </tr>
+          <tr>
+            <th>D (Top 4)</th>
+            <td>${fmt(myAfter.D)}${fmtDelta(myAfter.D, myBefore.D)}</td>
+            <td>${fmt(otherAfter.D)}${fmtDelta(otherAfter.D, otherBefore.D)}</td>
+          </tr>
+          <tr>
+            <th>G (Top 2)</th>
+            <td>${fmt(myAfter.G)}${fmtDelta(myAfter.G, myBefore.G)}</td>
+            <td>${fmt(otherAfter.G)}${fmtDelta(otherAfter.G, otherBefore.G)}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  `;
 
   return `
     <div class="tombola-result-card">
@@ -619,9 +740,7 @@ function renderTombolaSuggestion(result) {
           <ul>${renderTombolaPlayerList(result.incomingPlayers)}</ul>
         </section>
       </div>
-      <ul class="tombola-rationale-list">
-        ${result.rationale.map((line) => `<li>${escapeHtml(line)}</li>`).join("")}
-      </ul>
+      ${lineupTable}
     </div>
   `;
 }
@@ -646,10 +765,11 @@ function renderTombolaBoard(seasonKey) {
     tombolaToPlayerFilterIds = new Set();
     tombolaToPlayerFilterOpen = false;
     tombolaTradeMode = "fair";
-    tombolaSingleTradeOnly = false;
+    tombolaTradeStructure = "";
     tombolaExcludeGoalies = false;
     tombolaSendPosFilter = "";
     tombolaGetPosFilter = "";
+    tombolaGetPosPlusOne = false;
     tombolaLastEngineMessage = "";
   }
 
@@ -753,11 +873,15 @@ function renderTombolaBoard(seasonKey) {
   const exhaustedMessageClass = tombolaLastEngineMessage === TOMBOLA_EXHAUSTED_MESSAGE
     ? " tombola-empty-exhausted"
     : "";
+  const getPlusOneNoTradeHintClass = tombolaLastEngineMessage.startsWith("No trades satisfied GET ")
+    && tombolaLastEngineMessage.includes(" +1 ")
+    ? " tombola-empty-hint"
+    : "";
   const outputHtml = tombolaLastSuggestion
     ? renderTombolaSuggestion(tombolaLastSuggestion)
     : tombolaLastEngineMessage
-      ? `<div class="empty-state compact${exhaustedMessageClass}">${escapeHtml(tombolaLastEngineMessage)}</div>`
-      : '<div class="empty-state compact tombola-empty-hint">Select a <strong>From Fantasy Team</strong> and click <strong>Draw!</strong> to generate an analytically ranked trade path.</div>';
+      ? `<div class="empty-state compact${exhaustedMessageClass}${getPlusOneNoTradeHintClass}">${escapeHtml(tombolaLastEngineMessage)}</div>`
+      : '<div class="empty-state compact tombola-empty-hint">Select a <strong>My Fantasy Team</strong> and click <strong>Draw!</strong> to generate an analytically ranked trade path.</div>';
   const disableGPosOption = tombolaExcludeGoalies ? "disabled" : "";
 
   tombolaPane.innerHTML = `
@@ -799,18 +923,22 @@ function renderTombolaBoard(seasonKey) {
                 <input type="checkbox" value="G" ${tombolaGetPosFilter === "G" ? "checked" : ""} ${disableGPosOption} data-tombola-get-pos-filter />
                 <span>G</span>
               </label>
+              <label class="tombola-pos-radio-option tombola-pos-plus-one-option">
+                <input id="tombolaGetPlusOne" type="checkbox" ${tombolaGetPosPlusOne ? "checked" : ""} ${tombolaGetPosFilter ? "" : "disabled"} />
+                <span>+1</span>
+              </label>
             </fieldset>
           </div>
         </div>
         <div class="tombola-filter-row tombola-filter-row-from">
           <label class="draft-class-filter-group tombola-control-group tombola-team-filter-group">
-            <span class="filter-group-label">From Fantasy Team *</span>
+            <span class="filter-group-label">My Fantasy Team *</span>
             <div class="draft-class-select-wrap">
               <select id="tombolaFromTeamSelect" class="draft-class-select tombola-select">${fromOptions}</select>
             </div>
           </label>
           <label class="draft-class-filter-group tombola-control-group tombola-player-filter-group">
-            <span class="filter-group-label">FROM Players</span>
+            <span class="filter-group-label">MY PLAYERS</span>
             <details class="draft-multi-select tombola-player-select" data-tombola-from-player-filter ${tombolaFromTeamFilter && tombolaFromPlayerFilterOpen ? "open" : ""}>
               <summary class="draft-multi-summary">${fromPlayerSummaryText}</summary>
               <div class="draft-multi-menu">
@@ -860,8 +988,16 @@ function renderTombolaBoard(seasonKey) {
             <span class="tombola-param-label">LIMITS</span>
             <fieldset class="tombola-param-box tombola-limits-options" aria-label="Tombola limits options">
               <label class="tombola-single-option">
-                <input id="tombolaSingleOnly" type="checkbox" ${tombolaSingleTradeOnly ? "checked" : ""} />
-                <span>1:1 Trade Only</span>
+                <input type="checkbox" value="1:1" data-tombola-structure-filter ${tombolaTradeStructure === "1:1" ? "checked" : ""} />
+                <span>1:1 Trade</span>
+              </label>
+              <label class="tombola-single-option">
+                <input type="checkbox" value="1:2" data-tombola-structure-filter ${tombolaTradeStructure === "1:2" ? "checked" : ""} />
+                <span>1:2 Trade</span>
+              </label>
+              <label class="tombola-single-option">
+                <input type="checkbox" value="2:1" data-tombola-structure-filter ${tombolaTradeStructure === "2:1" ? "checked" : ""} />
+                <span>2:1 Trade</span>
               </label>
               <label class="tombola-single-option tombola-exclude-g-option">
                 <input id="tombolaExcludeG" type="checkbox" ${tombolaExcludeGoalies ? "checked" : ""} />
@@ -883,8 +1019,9 @@ function renderTombolaBoard(seasonKey) {
   const toSelect = tombolaPane.querySelector("#tombolaToTeamSelect");
   const fairModeInput = tombolaPane.querySelector("#tombolaModeFair");
   const fleeceModeInput = tombolaPane.querySelector("#tombolaModeFleece");
-  const singleOnlyInput = tombolaPane.querySelector("#tombolaSingleOnly");
+  const structureInputs = tombolaPane.querySelectorAll("[data-tombola-structure-filter]");
   const excludeGInput = tombolaPane.querySelector("#tombolaExcludeG");
+  const getPlusOneInput = tombolaPane.querySelector("#tombolaGetPlusOne");
   const sendPosFilterInputs = tombolaPane.querySelectorAll("[data-tombola-send-pos-filter]");
   const getPosFilterInputs = tombolaPane.querySelectorAll("[data-tombola-get-pos-filter]");
   const drawButton = tombolaPane.querySelector("#tombolaDrawBtn");
@@ -901,7 +1038,7 @@ function renderTombolaBoard(seasonKey) {
 
   const clearSuggestionOutput = () => {
     if (outputNode) {
-      outputNode.innerHTML = '<div class="empty-state compact tombola-empty-hint">Select a <strong>From Fantasy Team</strong> and click <strong>Draw!</strong> to generate an analytically ranked trade path.</div>';
+      outputNode.innerHTML = '<div class="empty-state compact tombola-empty-hint">Select a <strong>My Fantasy Team</strong> and click <strong>Draw!</strong> to generate an analytically ranked trade path.</div>';
     }
   };
 
@@ -910,12 +1047,14 @@ function renderTombolaBoard(seasonKey) {
       const selectedIds = Array.from(tombolaPane.querySelectorAll("[data-tombola-from-player]:checked"))
         .map((checkbox) => checkbox.value)
         .filter(Boolean);
-      if (tombolaSingleTradeOnly && selectedIds.length > 1) {
-        const latest = input.value;
+      const structureLimits = getTombolaStructureLimits(tombolaTradeStructure);
+      if (structureLimits && selectedIds.length > structureLimits.outgoing) {
+        const keptIds = selectedIds.slice(-structureLimits.outgoing);
+        const keptSet = new Set(keptIds);
         tombolaPane.querySelectorAll("[data-tombola-from-player]").forEach((checkbox) => {
-          checkbox.checked = checkbox.value === latest;
+          checkbox.checked = keptSet.has(checkbox.value);
         });
-        tombolaFromPlayerFilterIds = new Set(latest ? [latest] : []);
+        tombolaFromPlayerFilterIds = keptSet;
       } else {
         tombolaFromPlayerFilterIds = new Set(selectedIds);
       }
@@ -935,12 +1074,14 @@ function renderTombolaBoard(seasonKey) {
       const selectedIds = Array.from(tombolaPane.querySelectorAll("[data-tombola-to-player]:checked"))
         .map((checkbox) => checkbox.value)
         .filter(Boolean);
-      if (tombolaSingleTradeOnly && selectedIds.length > 1) {
-        const latest = input.value;
+      const structureLimits = getTombolaStructureLimits(tombolaTradeStructure);
+      if (structureLimits && selectedIds.length > structureLimits.incoming) {
+        const keptIds = selectedIds.slice(-structureLimits.incoming);
+        const keptSet = new Set(keptIds);
         tombolaPane.querySelectorAll("[data-tombola-to-player]").forEach((checkbox) => {
-          checkbox.checked = checkbox.value === latest;
+          checkbox.checked = keptSet.has(checkbox.value);
         });
-        tombolaToPlayerFilterIds = new Set(latest ? [latest] : []);
+        tombolaToPlayerFilterIds = keptSet;
       } else {
         tombolaToPlayerFilterIds = new Set(selectedIds);
       }
@@ -1059,18 +1200,34 @@ function renderTombolaBoard(seasonKey) {
     renderTombolaBoard(seasonKey);
   });
 
-  singleOnlyInput?.addEventListener("change", () => {
-    tombolaSingleTradeOnly = !!singleOnlyInput.checked;
-    if (tombolaSingleTradeOnly) {
-      const fromFirst = tombolaFromPlayerFilterIds.values().next().value;
-      const toFirst = tombolaToPlayerFilterIds.values().next().value;
-      tombolaFromPlayerFilterIds = fromFirst ? new Set([fromFirst]) : new Set();
-      tombolaToPlayerFilterIds = toFirst ? new Set([toFirst]) : new Set();
-    }
-    tombolaLastSuggestion = null;
-    tombolaLastSuggestionSignature = "";
-    tombolaLastEngineMessage = "";
-    renderTombolaBoard(seasonKey);
+  structureInputs.forEach((input) => {
+    input.addEventListener("change", () => {
+      if (!(input instanceof HTMLInputElement)) {
+        return;
+      }
+
+      if (input.checked) {
+        structureInputs.forEach((otherInput) => {
+          if (otherInput !== input && otherInput instanceof HTMLInputElement) {
+            otherInput.checked = false;
+          }
+        });
+        tombolaTradeStructure = input.value;
+      } else {
+        tombolaTradeStructure = "";
+      }
+
+      const structureLimits = getTombolaStructureLimits(tombolaTradeStructure);
+      if (structureLimits) {
+        tombolaFromPlayerFilterIds = new Set(Array.from(tombolaFromPlayerFilterIds).slice(0, structureLimits.outgoing));
+        tombolaToPlayerFilterIds = new Set(Array.from(tombolaToPlayerFilterIds).slice(0, structureLimits.incoming));
+      }
+
+      tombolaLastSuggestion = null;
+      tombolaLastSuggestionSignature = "";
+      tombolaLastEngineMessage = "";
+      renderTombolaBoard(seasonKey);
+    });
   });
 
   excludeGInput?.addEventListener("change", () => {
@@ -1128,11 +1285,23 @@ function renderTombolaBoard(seasonKey) {
         tombolaGetPosFilter = "";
       }
 
+      if (!tombolaGetPosFilter) {
+        tombolaGetPosPlusOne = false;
+      }
+
       tombolaLastSuggestion = null;
       tombolaLastSuggestionSignature = "";
       tombolaLastEngineMessage = "";
       renderTombolaBoard(seasonKey);
     });
+  });
+
+  getPlusOneInput?.addEventListener("change", () => {
+    tombolaGetPosPlusOne = !!getPlusOneInput.checked;
+    tombolaLastSuggestion = null;
+    tombolaLastSuggestionSignature = "";
+    tombolaLastEngineMessage = "";
+    renderTombolaBoard(seasonKey);
   });
 
   drawButton?.addEventListener("click", () => {
@@ -1146,12 +1315,13 @@ function renderTombolaBoard(seasonKey) {
       tombolaFromTeamFilter,
       tombolaToTeamFilter,
       tombolaTradeMode,
-      tombolaSingleTradeOnly,
+      tombolaTradeStructure,
       new Set(tombolaFromPlayerFilterIds),
       new Set(tombolaToPlayerFilterIds),
       tombolaExcludeGoalies,
       tombolaSendPosFilter,
-      tombolaGetPosFilter
+      tombolaGetPosFilter,
+      tombolaGetPosPlusOne
     );
     renderTombolaBoard(seasonKey);
   });

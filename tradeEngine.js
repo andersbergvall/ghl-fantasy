@@ -8,23 +8,40 @@
   const DEFAULT_LINEUP_TARGETS = { F: 12, D: 4, G: 2 };
 
   const TRADE_ENGINE_CONFIG = {
-    productionWeight: 0.56,
-    futureWeight: 0.2,
-    perceivedWeight: 0.24,
-    draftPedigreeStrength: 0.34,
-    keeperPerceptionAdjustment: 0.02,
-    freeAgentPerceptionAdjustment: -0.06,
-    unknownPerceptionAdjustment: -0.03,
-    ageRiskPerYearOver30: 0.015,
-    youthUpsideUnder24: 0.018,
-    rookieUncertaintyPenalty: 0.02,
-    rookieUpsideBonus: 0.015,
-    positionalScarcityWeight: 0.28,
-    replacementValueWeight: 0.36,
-    lineupDeltaWeight: 0.62,
-    packageDeltaWeight: 0.38,
-    fairBalancePenaltyWeight: 0.55,
-    fleeceCaptureWeight: 0.5,
+    observedProductionWeight: 0.48,
+    draftPriorWeight: 0.32,
+    discrepancySignalWeight: 0.2,
+    regressionRiskPenaltyWeight: 0.18,
+    ageUncertaintyPenaltyWeight: 0.08,
+    keeperMarketAdjustment: 0.04,
+    freeAgentMarketAdjustment: -0.08,
+    unknownMarketAdjustment: -0.04,
+    freeAgentDraftBaseline: 0.24,
+    keeperDraftBaseline: 0.72,
+    unknownDraftBaseline: 0.3,
+    latePickRegressionBias: 0.16,
+    freeAgentRegressionBias: 0.18,
+    earlyPickBuyLowBoost: 0.2,
+    ageUncertaintyPerYearFrom27: 0.008,
+    ageUpsideUnder24: 0.01,
+    ageRiskPerYearOver31: 0.012,
+    positionalScarcityWeight: 0.34,
+    lineupDeltaWeight: 1.2,
+    packageExpectedWeight: 0.95,
+    packageMarketWeight: 0.38,
+    packageRiskWeight: 0.34,
+    rosterBalanceWeight: 0.52,
+    fairBalancePenaltyWeight: 0.65,
+    fairDraftJumpPenaltyWeight: 0.5,
+    fairFaForAnchorPenaltyWeight: 0.28,
+    strictDraftFpgDominanceCheck: true,
+    twoForOneGoodPlayerRarityPenaltyFair: 0.44,
+    twoForOneGoodPlayerRarityPenaltyFleece: 0.26,
+    rejectSingleFaForDraftedPackage: true,
+    draftedPackagePickCutoffForSingleFa: 200,
+    rejectOverpoweredMultiIncoming: true,
+    fleeceCaptureWeight: 0.72,
+    fleeceDraftToleranceBoost: 0.3,
     fleeceOpponentFloor: -0.28,
     fairOpponentFloor: -0.2,
     maxPlayerPoolPerTeam: 11,
@@ -123,6 +140,31 @@
     return values.reduce((sum, value) => sum + value, 0) / values.length;
   }
 
+  function sum(values) {
+    return values.reduce((total, value) => total + value, 0);
+  }
+
+  function parseDraftRound(value) {
+    if (Number.isFinite(value)) {
+      return Number(value);
+    }
+
+    const text = String(value || "").trim();
+    if (!text) {
+      return NaN;
+    }
+
+    const matched = text.match(/\d+/);
+    return matched ? Number(matched[0]) : NaN;
+  }
+
+  function getDraftCurveValue(pick, maxDraftPick) {
+    if (!Number.isFinite(pick) || pick <= 0 || !Number.isFinite(maxDraftPick) || maxDraftPick <= 0) {
+      return 0;
+    }
+    return clamp(1 - (Math.log(pick + 1) / Math.log(maxDraftPick + 1)), 0, 1);
+  }
+
   function buildReplacementValues(players, freeAgentsByPos) {
     const replacementByPos = { F: 0, D: 0, G: 0 };
     const replacementSource = { F: "fallback", D: "fallback", G: "fallback" };
@@ -167,7 +209,9 @@
         return;
       }
 
-      const acquisition = classifyAcquisition(row.DraftPick);
+      const draftPickRaw = row.DraftPick ?? row["Draft Pick"] ?? row.draftPick ?? row["DraftPick"];
+      const draftRoundRaw = row.DraftRound ?? row["Draft Round"] ?? row.draftRound;
+      const acquisition = classifyAcquisition(draftPickRaw);
       const idBase = normalizeText(row.playerID || row.ID || row.Id || row.playerId);
       const stableId = idBase || `${normalizeKey(fantasyTeam)}:${normalizeKey(name)}`;
 
@@ -187,7 +231,9 @@
         acquisitionType: acquisition.type,
         acquisitionLabel: acquisition.label,
         draftPick: acquisition.draftPick,
-        draftPickRaw: row.DraftPick,
+        draftPickRaw,
+        draftRoundRaw,
+        draftRound: toNumber(draftRoundRaw, NaN),
       });
     });
 
@@ -253,62 +299,112 @@
     const maxFpts = validFpts.length ? Math.max(...validFpts) : 1;
     const fptsRange = Math.max(0.001, maxFpts - minFpts);
 
-    const maxDraftPick = draftPicks.length ? Math.max(...draftPicks) : 1;
+    const maxDraftPick = draftPicks.length ? Math.max(...draftPicks) : 240;
 
     return players.map((player) => {
       const fpgSafe = Number.isFinite(player.fpg) ? player.fpg : 0;
       const fptsSafe = Number.isFinite(player.fpts) ? player.fpts : 0;
 
-      const productionNorm = clamp((fpgSafe - minFpg) / fpgRange, 0, 1);
+      const observedProduction = clamp((fpgSafe - minFpg) / fpgRange, 0, 1);
       const totalsNorm = clamp((fptsSafe - minFpts) / fptsRange, 0, 1);
-      const observedProduction = clamp((productionNorm * 0.78) + (totalsNorm * 0.22), 0, 1);
+      const observedSignal = clamp((observedProduction * 0.78) + (totalsNorm * 0.22), 0, 1);
 
-      let draftPedigree = 0;
+      let draftExpectedValue;
       if (player.acquisitionType === "DRAFTED" && Number.isFinite(player.draftPick) && player.draftPick > 0) {
-        draftPedigree = clamp(1 - (Math.log(player.draftPick + 1) / Math.log(maxDraftPick + 1)), 0, 1);
-      }
-
-      let acquisitionAdjustment = 0;
-      if (player.acquisitionType === "KEEPER") {
-        acquisitionAdjustment = config.keeperPerceptionAdjustment;
+        draftExpectedValue = getDraftCurveValue(player.draftPick, maxDraftPick);
+      } else if (player.acquisitionType === "KEEPER") {
+        draftExpectedValue = config.keeperDraftBaseline;
       } else if (player.acquisitionType === "FREE_AGENT") {
-        acquisitionAdjustment = config.freeAgentPerceptionAdjustment;
-      } else if (player.acquisitionType === "UNKNOWN") {
-        acquisitionAdjustment = config.unknownPerceptionAdjustment;
+        draftExpectedValue = config.freeAgentDraftBaseline;
+      } else {
+        draftExpectedValue = config.unknownDraftBaseline;
       }
 
-      const perceivedValue = clamp(
-        (observedProduction * (1 - config.draftPedigreeStrength))
-          + (draftPedigree * config.draftPedigreeStrength)
-          + acquisitionAdjustment,
+      const discrepancy = clamp(observedSignal - draftExpectedValue, -1, 1);
+      const overperformance = Math.max(0, discrepancy);
+      const underperformance = Math.max(0, -discrepancy);
+
+      let regressionRisk = overperformance * (1 - draftExpectedValue) * (1 + config.latePickRegressionBias);
+      if (player.acquisitionType === "FREE_AGENT") {
+        regressionRisk += config.freeAgentRegressionBias * overperformance;
+      }
+      if (player.acquisitionType === "KEEPER") {
+        regressionRisk *= 0.88;
+      }
+      regressionRisk = clamp(regressionRisk, 0, 1);
+
+      let ageUncertainty = 0;
+      if (Number.isFinite(player.age) && player.age > 0) {
+        ageUncertainty += Math.abs(player.age - 27) * config.ageUncertaintyPerYearFrom27;
+        if (player.age > 31) {
+          ageUncertainty += (player.age - 31) * config.ageRiskPerYearOver31;
+        }
+      }
+      ageUncertainty = clamp(ageUncertainty, 0, 0.35);
+
+      let ageAdjustment = 0;
+      if (Number.isFinite(player.age) && player.age < 24) {
+        ageAdjustment += config.ageUpsideUnder24;
+      }
+
+      const buyLowSignal = clamp(underperformance * draftExpectedValue * (1 + config.earlyPickBuyLowBoost), 0, 1);
+      const sellHighSignal = clamp(overperformance * (1 - draftExpectedValue), 0, 1);
+      const breakoutSignal = clamp(overperformance * observedSignal * (1 - regressionRisk * 0.5), 0, 1);
+
+      let marketAdjustment = 0;
+      if (player.acquisitionType === "KEEPER") {
+        marketAdjustment = config.keeperMarketAdjustment;
+      } else if (player.acquisitionType === "FREE_AGENT") {
+        marketAdjustment = config.freeAgentMarketAdjustment;
+      } else if (player.acquisitionType === "UNKNOWN") {
+        marketAdjustment = config.unknownMarketAdjustment;
+      }
+
+      const marketPerceivedValue = clamp(
+        (draftExpectedValue * 0.62)
+          + (observedSignal * 0.38)
+          + marketAdjustment,
         0,
         1
       );
 
-      let ageAdjustment = 0;
-      if (Number.isFinite(player.age) && player.age > 30) {
-        ageAdjustment -= (player.age - 30) * config.ageRiskPerYearOver30;
-      }
-      if (Number.isFinite(player.age) && player.age < 24) {
-        ageAdjustment += config.youthUpsideUnder24;
-      }
+      const expectedValue = clamp(
+        (observedSignal * config.observedProductionWeight)
+          + (draftExpectedValue * config.draftPriorWeight)
+          + (buyLowSignal * config.discrepancySignalWeight)
+          + ageAdjustment
+          - (regressionRisk * config.regressionRiskPenaltyWeight)
+          - (ageUncertainty * config.ageUncertaintyPenaltyWeight),
+        0,
+        1
+      );
 
-      let rookieAdjustment = 0;
-      if (player.rookie) {
-        rookieAdjustment += config.rookieUpsideBonus;
-        rookieAdjustment -= config.rookieUncertaintyPenalty;
-      }
+      const opportunityGap = clamp(expectedValue - marketPerceivedValue, -1, 1);
 
-      const futureValue = clamp(observedProduction + ageAdjustment + rookieAdjustment, 0, 1);
-      const valueGap = clamp(observedProduction - perceivedValue, -1, 1);
+      let opportunityType = "balanced";
+      if (buyLowSignal >= sellHighSignal && buyLowSignal >= breakoutSignal && buyLowSignal > 0.12) {
+        opportunityType = "buy-low";
+      } else if (sellHighSignal >= buyLowSignal && sellHighSignal >= breakoutSignal && sellHighSignal > 0.12) {
+        opportunityType = "sell-high";
+      } else if (breakoutSignal > 0.14) {
+        opportunityType = "breakout";
+      }
 
       return {
         ...player,
-        productionValue: observedProduction,
-        draftPedigreeValue: draftPedigree,
-        perceivedValue,
-        futureValue,
-        valueGap,
+        observedProduction,
+        observedSignal,
+        draftExpectedValue,
+        discrepancy,
+        regressionRisk,
+        ageUncertainty,
+        buyLowSignal,
+        sellHighSignal,
+        breakoutSignal,
+        marketPerceivedValue,
+        expectedValue,
+        opportunityGap,
+        opportunityType,
       };
     });
   }
@@ -333,8 +429,8 @@
 
       Object.values(byPos).forEach((list) => {
         list.sort((left, right) => {
-          if (right.productionValue !== left.productionValue) {
-            return right.productionValue - left.productionValue;
+          if (right.observedSignal !== left.observedSignal) {
+            return right.observedSignal - left.observedSignal;
           }
           return left.uniqueId.localeCompare(right.uniqueId);
         });
@@ -368,8 +464,14 @@
       teamPlayers.forEach((player) => {
         const needPenalty = needs[player.pos] * 0.16;
         const surplusBoost = surplus[player.pos] * 0.13;
-        const draftGapSignal = clamp(player.perceivedValue - player.productionValue, -1, 1) * 0.22;
-        const score = (player.productionValue * 0.42) + (player.futureValue * 0.2) + draftGapSignal + surplusBoost - needPenalty;
+        const sellHighBias = player.sellHighSignal * 0.3;
+        const marketPremium = clamp(player.marketPerceivedValue - player.expectedValue, -1, 1) * 0.26;
+        const score = (player.marketPerceivedValue * 0.34)
+          + (player.observedSignal * 0.16)
+          + sellHighBias
+          + marketPremium
+          + surplusBoost
+          - needPenalty;
         tradeabilityScoreById.set(player.uniqueId, score);
       });
 
@@ -377,7 +479,13 @@
       teamPlayers.forEach((player) => {
         const needBoost = needs[player.pos] * 0.2;
         const scarcityBoost = Math.max(0, (lineupTargets[player.pos] - counts[player.pos])) * 0.05;
-        const score = (player.productionValue * 0.48) + (player.futureValue * 0.26) + (player.valueGap * 0.16) + needBoost + scarcityBoost;
+        const score = (player.expectedValue * 0.42)
+          + (player.buyLowSignal * 0.25)
+          + (player.breakoutSignal * 0.18)
+          + (player.observedSignal * 0.1)
+          - (player.regressionRisk * 0.12)
+          + needBoost
+          + scarcityBoost;
         targetabilityScoreById.set(player.uniqueId, score);
       });
 
@@ -390,6 +498,16 @@
         surplus,
         lineupTargets,
         replacementCosts,
+        positionalTotals: {
+          F: sum(byPos.F.map((player) => Number.isFinite(player.fpg) ? player.fpg : 0)),
+          D: sum(byPos.D.map((player) => Number.isFinite(player.fpg) ? player.fpg : 0)),
+          G: sum(byPos.G.map((player) => Number.isFinite(player.fpg) ? player.fpg : 0)),
+        },
+        positionalAverages: {
+          F: average(byPos.F.map((player) => Number.isFinite(player.fpg) ? player.fpg : 0)),
+          D: average(byPos.D.map((player) => Number.isFinite(player.fpg) ? player.fpg : 0)),
+          G: average(byPos.G.map((player) => Number.isFinite(player.fpg) ? player.fpg : 0)),
+        },
         tradeabilityScoreById,
         targetabilityScoreById,
       });
@@ -406,12 +524,15 @@
 
     let strength = 0;
     const shortages = { F: 0, D: 0, G: 0 };
+    const lineupByPos = { F: 0, D: 0, G: 0 };
 
     ["F", "D", "G"].forEach((position) => {
       const values = grouped[position].filter((value) => Number.isFinite(value) && value >= 0).sort((a, b) => b - a);
       const needed = lineupTargets[position];
       const chosen = values.slice(0, needed);
-      strength += chosen.reduce((sum, value) => sum + value, 0);
+      const chosenSum = chosen.reduce((sum, value) => sum + value, 0);
+      lineupByPos[position] = chosenSum;
+      strength += chosenSum;
 
       const missing = Math.max(0, needed - chosen.length);
       shortages[position] = missing;
@@ -423,6 +544,7 @@
     return {
       strength,
       shortages,
+      lineupByPos,
     };
   }
 
@@ -438,20 +560,59 @@
     const beforeState = getLineupStrength(beforePlayers, profile.lineupTargets, profile.replacementCosts);
     const afterState = getLineupStrength(afterPlayers, profile.lineupTargets, profile.replacementCosts);
 
-    const outgoingTradeValue = outgoingPlayers.reduce((sum, player) => sum + ((player.productionValue * config.productionWeight) + (player.futureValue * config.futureWeight) + (player.perceivedValue * config.perceivedWeight)), 0);
-    const incomingTradeValue = incomingPlayers.reduce((sum, player) => sum + ((player.productionValue * config.productionWeight) + (player.futureValue * config.futureWeight) + (player.perceivedValue * config.perceivedWeight)), 0);
+    const getPosCounts = (players) => players.reduce((acc, player) => {
+      acc[player.pos] += 1;
+      return acc;
+    }, { F: 0, D: 0, G: 0 });
+
+    const beforeCounts = getPosCounts(beforePlayers);
+    const afterCounts = getPosCounts(afterPlayers);
+
+    const beforeDeviation = ["F", "D", "G"].reduce((total, pos) => {
+      return total + Math.abs(beforeCounts[pos] - profile.lineupTargets[pos]);
+    }, 0);
+
+    const afterDeviation = ["F", "D", "G"].reduce((total, pos) => {
+      return total + Math.abs(afterCounts[pos] - profile.lineupTargets[pos]);
+    }, 0);
+
+    const rosterBalanceGain = beforeDeviation - afterDeviation;
+
+    const outgoingExpectedValue = sum(outgoingPlayers.map((player) => player.expectedValue));
+    const incomingExpectedValue = sum(incomingPlayers.map((player) => player.expectedValue));
+
+    const outgoingMarketValue = sum(outgoingPlayers.map((player) => player.marketPerceivedValue));
+    const incomingMarketValue = sum(incomingPlayers.map((player) => player.marketPerceivedValue));
+
+    const outgoingRiskCost = sum(outgoingPlayers.map((player) => player.regressionRisk + player.ageUncertainty));
+    const incomingRiskCost = sum(incomingPlayers.map((player) => player.regressionRisk + player.ageUncertainty));
 
     const lineupDelta = afterState.strength - beforeState.strength;
-    const packageDelta = incomingTradeValue - outgoingTradeValue;
+    const baselineStrength = Math.max(1, beforeState.strength);
+    const lineupDeltaNormalized = lineupDelta / baselineStrength;
+    const packageExpectedDelta = incomingExpectedValue - outgoingExpectedValue;
+    const packageMarketDelta = incomingMarketValue - outgoingMarketValue;
+    const riskDelta = incomingRiskCost - outgoingRiskCost;
     const shortageDelta = ["F", "D", "G"].reduce((sum, pos) => sum + (beforeState.shortages[pos] - afterState.shortages[pos]), 0);
 
-    const totalDelta = (lineupDelta * config.lineupDeltaWeight) + (packageDelta * config.packageDeltaWeight) + (shortageDelta * config.positionalScarcityWeight);
+    const totalDelta = (lineupDeltaNormalized * config.lineupDeltaWeight)
+      + (packageExpectedDelta * config.packageExpectedWeight)
+      + (packageMarketDelta * config.packageMarketWeight)
+      + (shortageDelta * config.positionalScarcityWeight)
+      + (rosterBalanceGain * config.rosterBalanceWeight)
+      - (riskDelta * config.packageRiskWeight);
 
     return {
       totalDelta,
       lineupDelta,
-      packageDelta,
+      lineupDeltaNormalized,
+      packageExpectedDelta,
+      packageMarketDelta,
+      riskDelta,
       shortageDelta,
+      rosterBalanceGain,
+      beforeCounts,
+      afterCounts,
       beforeState,
       afterState,
     };
@@ -542,11 +703,13 @@
       toTeamName,
       sendPosFilter,
       getPosFilter,
+      getPosRequirePlusOne,
       mode,
       checkedCombos,
       rejectedBySend,
       rejectedByGet,
       rejectedByModeFloor,
+      rejectedByDraftFpgRule,
       skippedByStructures,
       missingOutgoingCombos,
       missingIncomingCombos,
@@ -568,13 +731,19 @@
     }
 
     if (getPosFilter && rejectedByGet > 0 && rejectedByGet >= rejectedBySend && rejectedByGet >= rejectedByModeFloor) {
-      return `No trades satisfied GET ${getPosFilter} (from team must net-receive at least one ${getPosFilter}).`;
+      return getPosRequirePlusOne
+        ? `No trades satisfied GET ${getPosFilter} +1 (from team must net-receive at least one ${getPosFilter}).`
+        : `No trades satisfied GET ${getPosFilter} (from team must receive at least one ${getPosFilter} in the package).`;
     }
 
     if (rejectedByModeFloor > 0 && rejectedByModeFloor >= rejectedBySend && rejectedByModeFloor >= rejectedByGet) {
       return mode === "fleece"
         ? "No proposals passed fleece viability thresholds for both teams under current filters."
         : "No proposals passed fair-balance viability thresholds for both teams under current filters.";
+    }
+
+    if (rejectedByDraftFpgRule > 0 && rejectedByDraftFpgRule >= rejectedByModeFloor) {
+      return "No proposals passed the draft-pick/FP-G plausibility rule for 1:1 or 2:1 structures.";
     }
 
     if (missingOutgoingCombos > 0 || missingIncomingCombos > 0 || skippedByStructures > 0) {
@@ -584,7 +753,18 @@
     return "No valid proposals met all selected constraints and roster-feasibility checks.";
   }
 
-  function getTradeStructures(singleTradeOnly) {
+  function getTradeStructures(singleTradeOnly, tradeStructure) {
+    const normalizedStructure = normalizeText(tradeStructure);
+    if (normalizedStructure === "1:1") {
+      return [[1, 1]];
+    }
+    if (normalizedStructure === "1:2") {
+      return [[1, 2]];
+    }
+    if (normalizedStructure === "2:1") {
+      return [[2, 1]];
+    }
+
     if (singleTradeOnly) {
       return [[1, 1]];
     }
@@ -594,6 +774,40 @@
       [2, 1], [2, 2], [2, 3],
       [3, 1], [3, 2], [3, 3],
     ];
+  }
+
+  function isDraftAndFpgDominance(leftPlayer, rightPlayer) {
+    const leftPick = Number(leftPlayer?.draftPick);
+    const rightPick = Number(rightPlayer?.draftPick);
+    const leftFpg = Number(leftPlayer?.fpg);
+    const rightFpg = Number(rightPlayer?.fpg);
+
+    if (!Number.isFinite(leftPick) || !Number.isFinite(rightPick) || leftPick <= 0 || rightPick <= 0) {
+      return false;
+    }
+    if (!Number.isFinite(leftFpg) || !Number.isFinite(rightFpg)) {
+      return false;
+    }
+
+    return leftPick < rightPick && leftFpg > rightFpg;
+  }
+
+  function isGoodPlayerAsset(player, threshold) {
+    return Number.isFinite(player?.expectedValue)
+      && Number.isFinite(player?.observedSignal)
+      && player.expectedValue >= threshold
+      && player.observedSignal >= 0.45;
+  }
+
+  function isDraftedWithinCutoff(player, cutoff) {
+    return Number.isFinite(player?.draftPick)
+      && player.draftPick > 0
+      && player.draftPick <= cutoff;
+  }
+
+  function isSingleFaType(player) {
+    const type = String(player?.acquisitionType || "");
+    return type === "FREE_AGENT" || type === "UNKNOWN";
   }
 
   function packageSignature(fromTeamName, toTeamName, outgoingPlayers, incomingPlayers) {
@@ -632,13 +846,28 @@
     const observedDelta = incomingPlayers.reduce((sum, player) => sum + player.fpg, 0) - outgoingPlayers.reduce((sum, player) => sum + player.fpg, 0);
     lines.push(`Observed FP/G swing for ${fromTeamName}: ${observedDelta >= 0 ? "+" : ""}${observedDelta.toFixed(2)} (current-season).`);
 
+    const outgoingDraft = sum(outgoingPlayers.map((player) => player.draftExpectedValue));
+    const incomingDraft = sum(incomingPlayers.map((player) => player.draftExpectedValue));
+    lines.push(`Draft-prior balance (heuristic): ${fromTeamName} ${incomingDraft >= outgoingDraft ? "gains" : "gives"} ${(Math.abs(incomingDraft - outgoingDraft)).toFixed(2)} draft-value units.`);
+
+    const outgoingRegression = average(outgoingPlayers.map((player) => player.regressionRisk));
+    const incomingRegression = average(incomingPlayers.map((player) => player.regressionRisk));
+    lines.push(`Regression-uncertainty shift (heuristic): ${fromTeamName} ${incomingRegression <= outgoingRegression ? "reduces" : "adds"} uncertainty (${incomingRegression.toFixed(2)} vs ${outgoingRegression.toFixed(2)}).`);
+
+    const outgoingBuyLow = outgoingPlayers.filter((player) => player.opportunityType === "buy-low").length;
+    const incomingBuyLow = incomingPlayers.filter((player) => player.opportunityType === "buy-low").length;
+    const outgoingSellHigh = outgoingPlayers.filter((player) => player.opportunityType === "sell-high").length;
+    const incomingSellHigh = incomingPlayers.filter((player) => player.opportunityType === "sell-high").length;
+    lines.push(`Opportunity mix: incoming buy-low ${incomingBuyLow}, incoming sell-high ${incomingSellHigh}, outgoing buy-low ${outgoingBuyLow}, outgoing sell-high ${outgoingSellHigh}.`);
+
     if (mode === "fleece") {
-      lines.push("Potential buy-low / sell-high signal is heuristic from draft pedigree vs current production; no historical regression model is used.");
+      lines.push("Fleece mode emphasizes value-capture opportunities from market-prior vs current-production discrepancies, while keeping minimum opponent plausibility.");
     } else {
-      lines.push("Fair mode balances both teams' estimated package + lineup effects instead of matching raw FP/G totals.");
+      lines.push("Fair mode prioritizes two-way plausibility: package value, lineup impact, and manageable draft-prior jumps for both teams.");
     }
 
     lines.push(`Lineup impact estimate: ${fromTeamName} ${fromDelta.lineupDelta >= 0 ? "+" : ""}${fromDelta.lineupDelta.toFixed(2)} FP/G, ${toTeamName} ${toDelta.lineupDelta >= 0 ? "+" : ""}${toDelta.lineupDelta.toFixed(2)} FP/G.`);
+    lines.push(`Roster-balance effect: ${fromTeamName} ${fromDelta.rosterBalanceGain >= 0 ? "+" : ""}${fromDelta.rosterBalanceGain.toFixed(2)}, ${toTeamName} ${toDelta.rosterBalanceGain >= 0 ? "+" : ""}${toDelta.rosterBalanceGain.toFixed(2)} (closer to target composition).`);
 
     const replacementNote = ["F", "D", "G"]
       .filter((pos) => replacementSource[pos] !== "free-agent")
@@ -649,7 +878,7 @@
       lines.push(`Replacement-level for ${replacementNote} uses fallback league baselines because sufficient FA samples were unavailable.`);
     }
 
-    lines.push(`Main risk: heuristic age/rookie adjustments and no historical trend data.`);
+    lines.push("Main risk: all regression and market-mispricing signals are deterministic heuristics from current FP/G, draft position, age, and roster composition (no historical model)." );
     return lines;
   }
 
@@ -754,9 +983,11 @@
     const toTeamName = normalizeText(params?.toTeamName);
     const mode = params?.mode === "fleece" ? "fleece" : "fair";
     const singleTradeOnly = !!params?.singleTradeOnly;
+    const tradeStructure = normalizeText(params?.tradeStructure);
     const excludeGoalies = !!params?.excludeGoalies;
     const sendPosFilter = normalizeText(params?.sendPosFilter).toUpperCase();
     const getPosFilter = normalizeText(params?.getPosFilter).toUpperCase();
+    const getPosRequirePlusOne = !!params?.getPosRequirePlusOne;
     const fixedOutgoingIds = params?.fixedOutgoingIds instanceof Set ? params.fixedOutgoingIds : new Set(params?.fixedOutgoingIds || []);
     const fixedIncomingIds = params?.fixedIncomingIds instanceof Set ? params.fixedIncomingIds : new Set(params?.fixedIncomingIds || []);
 
@@ -774,19 +1005,27 @@
       : [...context.teamProfiles.keys()].filter((team) => team !== fromTeamName);
 
     const proposals = [];
-    const structures = getTradeStructures(singleTradeOnly);
+    const structures = getTradeStructures(singleTradeOnly, tradeStructure);
     const diagnostics = {
       checkedCombos: 0,
       rejectedBySend: 0,
       rejectedByGet: 0,
       rejectedByGoalie: 0,
       rejectedByModeFloor: 0,
+      rejectedByDraftFpgRule: 0,
       skippedByStructures: 0,
       missingOutgoingCombos: 0,
       missingIncomingCombos: 0,
       missingSendPosOnOutgoingPool: 0,
       missingGetPosOnIncomingPool: 0,
     };
+
+    const goodOutgoingThreshold = percentile(
+      fromProfile.players
+        .map((player) => player.expectedValue)
+        .filter((value) => Number.isFinite(value)),
+      0.62
+    ) || 0.56;
 
     for (const opponentName of opponentNames) {
       if (opponentName === fromTeamName) {
@@ -883,7 +1122,12 @@
               diagnostics.rejectedBySend += 1;
               continue;
             }
-            if (getPosFilter && (incomingPosCount[getPosFilter] - outgoingPosCount[getPosFilter] < 1)) {
+            if (getPosFilter && incomingPosCount[getPosFilter] < 1) {
+              diagnostics.rejectedByGet += 1;
+              continue;
+            }
+
+            if (getPosFilter && getPosRequirePlusOne && (incomingPosCount[getPosFilter] - outgoingPosCount[getPosFilter] < 1)) {
               diagnostics.rejectedByGet += 1;
               continue;
             }
@@ -893,20 +1137,74 @@
               continue;
             }
 
+            if (config.rejectSingleFaForDraftedPackage && inCount === 1 && outCount >= 1) {
+              const incomingSingle = incomingPlayers[0];
+              const outgoingHasMeaningfulDraftedAsset = outgoingPlayers.some((player) => isDraftedWithinCutoff(player, config.draftedPackagePickCutoffForSingleFa));
+              if (isSingleFaType(incomingSingle) && outgoingHasMeaningfulDraftedAsset) {
+                diagnostics.rejectedByDraftFpgRule += 1;
+                continue;
+              }
+            }
+
+            if (config.strictDraftFpgDominanceCheck && inCount === 1 && (outCount === 1 || outCount === 2)) {
+              const incomingHead = incomingPlayers[0];
+              const violatesDominance = outgoingPlayers.some((outgoingPlayer) => isDraftAndFpgDominance(outgoingPlayer, incomingHead));
+              if (violatesDominance) {
+                diagnostics.rejectedByDraftFpgRule += 1;
+                continue;
+              }
+            }
+
+            if (config.rejectOverpoweredMultiIncoming && inCount > outCount) {
+              const singleOutgoing = outgoingPlayers[0];
+              if (outgoingPlayers.length === 1 && incomingPlayers.length >= 2 && singleOutgoing) {
+                const incomingAllBetterFpg = incomingPlayers.every((player) => Number.isFinite(player.fpg) && Number.isFinite(singleOutgoing.fpg) && player.fpg > singleOutgoing.fpg);
+                const incomingHasEarlyDraft = incomingPlayers.some((player) => Number.isFinite(player.draftPick) && player.draftPick > 0 && player.draftPick <= 24);
+                const outgoingIsLateDraft = Number.isFinite(singleOutgoing.draftPick) && singleOutgoing.draftPick >= 120;
+
+                if (incomingAllBetterFpg && incomingHasEarlyDraft && outgoingIsLateDraft) {
+                  diagnostics.rejectedByDraftFpgRule += 1;
+                  continue;
+                }
+              }
+            }
+
             const fromDelta = evaluateTeamDelta(fromProfile, outgoingPlayers, incomingPlayers, config);
             const toDelta = evaluateTeamDelta(toProfile, incomingPlayers, outgoingPlayers, config);
 
-            const fromPackageValue = incomingPlayers.reduce((sum, player) => sum + player.productionValue, 0)
-              - outgoingPlayers.reduce((sum, player) => sum + player.productionValue, 0);
-            const perceivedCapture = incomingPlayers.reduce((sum, player) => sum + player.valueGap, 0)
-              - outgoingPlayers.reduce((sum, player) => sum + player.valueGap, 0);
+            const fromObservedDelta = incomingPlayers.reduce((sum, player) => sum + player.observedSignal, 0)
+              - outgoingPlayers.reduce((sum, player) => sum + player.observedSignal, 0);
+            const fromDraftDelta = incomingPlayers.reduce((sum, player) => sum + player.draftExpectedValue, 0)
+              - outgoingPlayers.reduce((sum, player) => sum + player.draftExpectedValue, 0);
+            const inefficiencyCapture = incomingPlayers.reduce((sum, player) => sum + player.opportunityGap, 0)
+              - outgoingPlayers.reduce((sum, player) => sum + player.opportunityGap, 0);
+            const fromRiskDelta = incomingPlayers.reduce((sum, player) => sum + player.regressionRisk + player.ageUncertainty, 0)
+              - outgoingPlayers.reduce((sum, player) => sum + player.regressionRisk + player.ageUncertainty, 0);
+
+            const outgoingEarlyAnchors = outgoingPlayers.filter((player) => Number.isFinite(player.draftPick) && player.draftPick > 0 && player.draftPick <= 24).length;
+            const incomingEarlyAnchors = incomingPlayers.filter((player) => Number.isFinite(player.draftPick) && player.draftPick > 0 && player.draftPick <= 24).length;
+            const outgoingOnlyFaOrLate = outgoingPlayers.every((player) => !Number.isFinite(player.draftPick) || player.draftPick > 100);
+            const incomingHasEarlyAnchor = incomingEarlyAnchors > 0;
+            const faForAnchorPenalty = outgoingOnlyFaOrLate && incomingHasEarlyAnchor ? 1 : 0;
+            const draftJumpPenalty = Math.max(0, fromDraftDelta - (0.22 + (Math.max(0, outgoingPlayers.length - 1) * 0.12)));
+
+            const twoForOneGoodUpgrade = outCount === 2
+              && inCount === 1
+              && outgoingPlayers.every((player) => isGoodPlayerAsset(player, goodOutgoingThreshold))
+              && outgoingPlayers.every((player) => isDraftAndFpgDominance(incomingPlayers[0], player));
+
+            const twoForOneUpgradePenalty = twoForOneGoodUpgrade
+              ? (mode === "fleece"
+                ? config.twoForOneGoodPlayerRarityPenaltyFleece
+                : config.twoForOneGoodPlayerRarityPenaltyFair)
+              : 0;
 
             const denominator = Math.max(0.5, Math.abs(fromDelta.totalDelta) + Math.abs(toDelta.totalDelta));
             const fairnessScore = 1 - clamp(Math.abs(fromDelta.totalDelta - toDelta.totalDelta) / denominator, 0, 1);
             const fitScore = clamp((fromDelta.shortageDelta + toDelta.shortageDelta + 4) / 8, 0, 1);
             const upsideScore = clamp(
-              (incomingPlayers.reduce((sum, player) => sum + player.futureValue, 0)
-                - outgoingPlayers.reduce((sum, player) => sum + player.futureValue, 0)
+              (incomingPlayers.reduce((sum, player) => sum + player.expectedValue, 0)
+                - outgoingPlayers.reduce((sum, player) => sum + player.expectedValue, 0)
                 + outgoingPlayers.length)
               / Math.max(1, outgoingPlayers.length + incomingPlayers.length),
               0,
@@ -920,11 +1218,14 @@
                 continue;
               }
               composite = (
-                (fromDelta.totalDelta * 1.1)
-                + (fromPackageValue * 0.45)
-                + (perceivedCapture * config.fleeceCaptureWeight)
-                + (fitScore * 0.6)
+                (fromDelta.totalDelta * 1.14)
+                + (fromObservedDelta * 0.22)
+                + (fromDraftDelta * (0.16 + config.fleeceDraftToleranceBoost))
+                + (inefficiencyCapture * config.fleeceCaptureWeight)
+                - (Math.max(0, fromRiskDelta) * 0.18)
+                + (fitScore * 0.56)
                 + (fairnessScore * 0.2)
+                - twoForOneUpgradePenalty
               );
             } else {
               if (fromDelta.totalDelta < config.fairOpponentFloor || toDelta.totalDelta < config.fairOpponentFloor) {
@@ -932,11 +1233,20 @@
                 continue;
               }
               const balancePenalty = Math.abs(fromDelta.totalDelta - toDelta.totalDelta) * config.fairBalancePenaltyWeight;
+              const draftPenalty = draftJumpPenalty * config.fairDraftJumpPenaltyWeight;
+              const anchorPenalty = faForAnchorPenalty * config.fairFaForAnchorPenaltyWeight;
               composite = (
                 (fromDelta.totalDelta + toDelta.totalDelta)
+                + (fromObservedDelta * 0.12)
+                + (fromDraftDelta * 0.1)
+                + (inefficiencyCapture * 0.25)
+                - (Math.max(0, fromRiskDelta) * 0.24)
                 + (fitScore * 0.75)
                 + (fairnessScore * 0.7)
                 - balancePenalty
+                - draftPenalty
+                - anchorPenalty
+                - twoForOneUpgradePenalty
               );
             }
 
@@ -959,8 +1269,13 @@
                 fromAdvantageRatio,
                 fromUtility: fromDelta.totalDelta,
                 toUtility: toDelta.totalDelta,
-                observedDelta: fromPackageValue,
-                perceivedDelta: perceivedCapture,
+                observedDelta: fromObservedDelta,
+                draftPriorDelta: fromDraftDelta,
+                opportunityDelta: inefficiencyCapture,
+                riskDelta: fromRiskDelta,
+                faForAnchorPenalty,
+                draftJumpPenalty,
+                twoForOneUpgradePenalty,
               },
               rationale: buildRationale(
                 mode,
@@ -1082,6 +1397,14 @@
         pickLabel: player.acquisitionLabel,
         acquisitionType: player.acquisitionType,
         acquisitionLabel: player.acquisitionLabel,
+        observedProduction: player.observedSignal,
+        draftExpectedValue: player.draftExpectedValue,
+        expectedValue: player.expectedValue,
+        marketPerceivedValue: player.marketPerceivedValue,
+        regressionRisk: player.regressionRisk,
+        ageUncertainty: player.ageUncertainty,
+        opportunityType: player.opportunityType,
+        opportunityGap: player.opportunityGap,
         playerMetaLabel: buildDisplayMeta(player),
       })),
       incomingPlayers: proposal.incomingPlayers.map((player) => ({
@@ -1098,6 +1421,14 @@
         pickLabel: player.acquisitionLabel,
         acquisitionType: player.acquisitionType,
         acquisitionLabel: player.acquisitionLabel,
+        observedProduction: player.observedSignal,
+        draftExpectedValue: player.draftExpectedValue,
+        expectedValue: player.expectedValue,
+        marketPerceivedValue: player.marketPerceivedValue,
+        regressionRisk: player.regressionRisk,
+        ageUncertainty: player.ageUncertainty,
+        opportunityType: player.opportunityType,
+        opportunityGap: player.opportunityGap,
         playerMetaLabel: buildDisplayMeta(player),
       })),
     }));
@@ -1111,6 +1442,7 @@
             toTeamName,
             sendPosFilter,
             getPosFilter,
+            getPosRequirePlusOne,
             mode,
             ...diagnostics,
           }),
