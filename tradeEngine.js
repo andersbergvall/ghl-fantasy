@@ -34,12 +34,19 @@
     fairBalancePenaltyWeight: 0.65,
     fairDraftJumpPenaltyWeight: 0.5,
     fairFaForAnchorPenaltyWeight: 0.28,
-    strictDraftFpgDominanceCheck: true,
+    enablePlausibilityGuardrails: true,
     twoForOneGoodPlayerRarityPenaltyFair: 0.44,
     twoForOneGoodPlayerRarityPenaltyFleece: 0.26,
-    rejectSingleFaForDraftedPackage: true,
-    draftedPackagePickCutoffForSingleFa: 200,
-    rejectOverpoweredMultiIncoming: true,
+    faPackageMeaningfulPickCutoff: 160,
+    faForEarlyPickCutoff: 72,
+    faForEarlyPickFpgMargin: 0.6,
+    sideImbalanceDraftLossMin: 0.2,
+    sideImbalanceUtilityFloor: 0,
+    oneSidedGiverUtilityMin: 0.25,
+    rareConsolidationCounterpartyMinUtility: 0.05,
+    goodAssetPercentile: 0.62,
+    goodAssetFallbackThreshold: 0.56,
+    goodAssetMinObservedSignal: 0.45,
     fleeceCaptureWeight: 0.72,
     fleeceDraftToleranceBoost: 0.3,
     fleeceOpponentFloor: -0.28,
@@ -710,6 +717,7 @@
       rejectedByGet,
       rejectedByModeFloor,
       rejectedByDraftFpgRule,
+      rejectedByGetPlusOne = 0,
       skippedByStructures,
       missingOutgoingCombos,
       missingIncomingCombos,
@@ -730,9 +738,15 @@
       return `No trades satisfied SEND ${sendPosFilter} (from team must net-send at least one ${sendPosFilter}).`;
     }
 
+    if (getPosFilter && getPosRequirePlusOne && rejectedByGetPlusOne > 0
+      && rejectedByGetPlusOne >= rejectedBySend && rejectedByGetPlusOne >= rejectedByModeFloor
+      && rejectedByGetPlusOne >= rejectedByDraftFpgRule) {
+      return `No trades satisfied GET ${getPosFilter} +1 (from team must net-receive exactly one ${getPosFilter}).`;
+    }
+
     if (getPosFilter && rejectedByGet > 0 && rejectedByGet >= rejectedBySend && rejectedByGet >= rejectedByModeFloor) {
       return getPosRequirePlusOne
-        ? `No trades satisfied GET ${getPosFilter} +1 (from team must net-receive at least one ${getPosFilter}).`
+        ? `No trades satisfied GET ${getPosFilter} +1 (from team must net-receive exactly one ${getPosFilter}).`
         : `No trades satisfied GET ${getPosFilter} (from team must receive at least one ${getPosFilter} in the package).`;
     }
 
@@ -743,7 +757,7 @@
     }
 
     if (rejectedByDraftFpgRule > 0 && rejectedByDraftFpgRule >= rejectedByModeFloor) {
-      return "No proposals passed the draft-pick/FP-G plausibility rule for 1:1 or 2:1 structures.";
+      return "No proposals passed the trade-plausibility guardrails (draft pick, FP/G and two-sided value checks).";
     }
 
     if (missingOutgoingCombos > 0 || missingIncomingCombos > 0 || skippedByStructures > 0) {
@@ -776,38 +790,171 @@
     ];
   }
 
-  function isDraftAndFpgDominance(leftPlayer, rightPlayer) {
-    const leftPick = Number(leftPlayer?.draftPick);
-    const rightPick = Number(rightPlayer?.draftPick);
-    const leftFpg = Number(leftPlayer?.fpg);
-    const rightFpg = Number(rightPlayer?.fpg);
+  const GUARDRAIL_REASONS = [
+    "draft_and_fpg_dominated",
+    "implausible_asset_exchange",
+    "two_sided_value_imbalance",
+  ];
 
-    if (!Number.isFinite(leftPick) || !Number.isFinite(rightPick) || leftPick <= 0 || rightPick <= 0) {
-      return false;
-    }
-    if (!Number.isFinite(leftFpg) || !Number.isFinite(rightFpg)) {
-      return false;
-    }
-
-    return leftPick < rightPick && leftFpg > rightFpg;
+  // Only ordinary fantasy draft picks are comparable by pick number.
+  // Keepers (999) and free agents (blank) are separate categories and never enter this comparison.
+  function isOrdinaryDrafted(player) {
+    return player?.acquisitionType === "DRAFTED"
+      && Number.isFinite(player.draftPick)
+      && player.draftPick > 0;
   }
 
-  function isGoodPlayerAsset(player, threshold) {
+  // True when `betterPlayer` has an earlier ordinary pick AND higher FP/G than `otherPlayer`.
+  function isDraftAndFpgDominance(betterPlayer, otherPlayer) {
+    if (!isOrdinaryDrafted(betterPlayer) || !isOrdinaryDrafted(otherPlayer)) {
+      return false;
+    }
+
+    const betterFpg = Number(betterPlayer.fpg);
+    const otherFpg = Number(otherPlayer.fpg);
+    if (!Number.isFinite(betterFpg) || !Number.isFinite(otherFpg)) {
+      return false;
+    }
+
+    return betterPlayer.draftPick < otherPlayer.draftPick && betterFpg > otherFpg;
+  }
+
+  function isGoodPlayerAsset(player, threshold, minObservedSignal) {
     return Number.isFinite(player?.expectedValue)
       && Number.isFinite(player?.observedSignal)
       && player.expectedValue >= threshold
-      && player.observedSignal >= 0.45;
+      && player.observedSignal >= minObservedSignal;
   }
 
-  function isDraftedWithinCutoff(player, cutoff) {
-    return Number.isFinite(player?.draftPick)
-      && player.draftPick > 0
-      && player.draftPick <= cutoff;
+  function getGoodAssetThreshold(profile, config) {
+    const values = (profile?.players || [])
+      .map((player) => player.expectedValue)
+      .filter((value) => Number.isFinite(value));
+    return percentile(values, config.goodAssetPercentile) || config.goodAssetFallbackThreshold;
   }
 
   function isSingleFaType(player) {
     const type = String(player?.acquisitionType || "");
     return type === "FREE_AGENT" || type === "UNKNOWN";
+  }
+
+  // Evaluates one manager's side of a trade. `given` is what that manager sends, `received` what they get.
+  // Returns the first guardrail reason that fails, plus whether this is a (rare) two-strong-for-one-better trade.
+  function assessTradeSide(side, config, mode) {
+    const { given, received } = side;
+    const receivedSingle = received.length === 1 ? received[0] : null;
+    const outcome = { reasons: [], rareConsolidation: false };
+
+    // 1. Hard rule (1:1 and 2:1 from this manager's view): never give up a player who is better on BOTH
+    //    ordinary draft pick and FP/G than the single player received.
+    if (receivedSingle
+      && (given.length === 1 || given.length === 2)
+      && given.some((player) => isDraftAndFpgDominance(player, receivedSingle))) {
+      outcome.reasons.push("draft_and_fpg_dominated");
+    }
+
+    // 2. Draft assets for a single free agent are not a normal exchange.
+    if (receivedSingle && isSingleFaType(receivedSingle)) {
+      const ordinaryPicks = given.filter(isOrdinaryDrafted);
+      if (ordinaryPicks.length >= 2
+        && ordinaryPicks.some((player) => player.draftPick <= config.faPackageMeaningfulPickCutoff)) {
+        outcome.reasons.push("implausible_asset_exchange");
+      } else if (mode === "fair"
+        && given.length === 1
+        && isOrdinaryDrafted(given[0])
+        && given[0].draftPick <= config.faForEarlyPickCutoff) {
+        const fpgGap = Number(receivedSingle.fpg) - Number(given[0].fpg);
+        if (!(fpgGap >= config.faForEarlyPickFpgMargin)) {
+          outcome.reasons.push("implausible_asset_exchange");
+        }
+      }
+    }
+
+    // 3. Two strong players for one better (earlier pick + higher FP/G) player is rare: both must be genuinely
+    //    strong assets and the counterparty must have a real reason to accept.
+    if (receivedSingle
+      && given.length === 2
+      && given.every((player) => isDraftAndFpgDominance(receivedSingle, player))) {
+      const bothGood = given.every((player) => isGoodPlayerAsset(player, side.goodAssetThreshold, config.goodAssetMinObservedSignal));
+      if (!bothGood) {
+        outcome.reasons.push("implausible_asset_exchange");
+      } else if (!(side.counterpartyUtility >= config.rareConsolidationCounterpartyMinUtility)) {
+        outcome.reasons.push("two_sided_value_imbalance");
+      } else {
+        outcome.rareConsolidation = true;
+      }
+    }
+
+    // 4. Two-sided check: a manager who gives up clearly more draft value AND the best FP/G asset, with no
+    //    roster-specific utility to compensate, would not plausibly accept.
+    // 4. Two-sided check: a manager who gives up the best draft asset AND the best FP/G asset by a clear margin,
+    //    with no roster-specific utility to compensate, would not plausibly accept. Best assets are compared
+    //    (not sums) so that sending more players is not mistaken for sending more value.
+    const bestGivenDraft = Math.max(...given.map((player) => player.draftExpectedValue));
+    const bestReceivedDraft = Math.max(...received.map((player) => player.draftExpectedValue));
+    const draftMargin = bestGivenDraft - bestReceivedDraft;
+    const bestGivenFpg = Math.max(...given.map((player) => (Number.isFinite(player.fpg) ? player.fpg : -Infinity)));
+    const bestReceivedFpg = Math.max(...received.map((player) => (Number.isFinite(player.fpg) ? player.fpg : -Infinity)));
+    if (draftMargin > config.sideImbalanceDraftLossMin
+      && bestGivenFpg > bestReceivedFpg
+      && side.utility < config.sideImbalanceUtilityFloor) {
+      outcome.reasons.push("two_sided_value_imbalance");
+    }
+
+    // 5. Overwhelmingly one-sided package: a manager gives MORE players including the better draft asset and the
+    //    higher-FP/G asset, yet receives fewer players. Only a strong roster-specific gain can justify it.
+    if (given.length > received.length
+      && draftMargin > 0
+      && bestGivenFpg > bestReceivedFpg
+      && side.utility < config.oneSidedGiverUtilityMin) {
+      outcome.reasons.push("two_sided_value_imbalance");
+    }
+
+    return outcome;
+  }
+
+  // Dedicated plausibility step, separate from valuation. Evaluates both managers' perspectives and never
+  // reverses the proposal direction. Rejection reasons are explainable via GUARDRAIL_REASONS.
+  function validateTradePlausibility(params) {
+    const config = { ...TRADE_ENGINE_CONFIG, ...(params?.config || {}) };
+    const mode = params?.mode === "fleece" ? "fleece" : "fair";
+    const outgoingPlayers = params?.outgoingPlayers || [];
+    const incomingPlayers = params?.incomingPlayers || [];
+    const fromUtility = toNumber(params?.fromUtility, 0);
+    const toUtility = toNumber(params?.toUtility, 0);
+
+    if (!config.enablePlausibilityGuardrails || !outgoingPlayers.length || !incomingPlayers.length) {
+      return { ok: true, reason: "", reasons: [], rareConsolidation: false };
+    }
+
+    const fromOutcome = assessTradeSide({
+      given: outgoingPlayers,
+      received: incomingPlayers,
+      utility: fromUtility,
+      counterpartyUtility: toUtility,
+      goodAssetThreshold: toNumber(params?.goodAssetThresholdFrom, config.goodAssetFallbackThreshold),
+    }, config, mode);
+
+    const toOutcome = assessTradeSide({
+      given: incomingPlayers,
+      received: outgoingPlayers,
+      utility: toUtility,
+      counterpartyUtility: fromUtility,
+      goodAssetThreshold: toNumber(params?.goodAssetThresholdTo, config.goodAssetFallbackThreshold),
+    }, config, mode);
+
+    const reasons = fromOutcome.reasons.concat(toOutcome.reasons);
+    if (reasons.length) {
+      const reason = GUARDRAIL_REASONS.find((candidate) => reasons.includes(candidate)) || reasons[0];
+      return { ok: false, reason, reasons, rareConsolidation: false };
+    }
+
+    return {
+      ok: true,
+      reason: "",
+      reasons: [],
+      rareConsolidation: fromOutcome.rareConsolidation || toOutcome.rareConsolidation,
+    };
   }
 
   function packageSignature(fromTeamName, toTeamName, outgoingPlayers, incomingPlayers) {
@@ -1013,6 +1160,12 @@
       rejectedByGoalie: 0,
       rejectedByModeFloor: 0,
       rejectedByDraftFpgRule: 0,
+      rejectedByGetPlusOne: 0,
+      rejectedByGuardrail: {
+        draft_and_fpg_dominated: 0,
+        implausible_asset_exchange: 0,
+        two_sided_value_imbalance: 0,
+      },
       skippedByStructures: 0,
       missingOutgoingCombos: 0,
       missingIncomingCombos: 0,
@@ -1020,12 +1173,7 @@
       missingGetPosOnIncomingPool: 0,
     };
 
-    const goodOutgoingThreshold = percentile(
-      fromProfile.players
-        .map((player) => player.expectedValue)
-        .filter((value) => Number.isFinite(value)),
-      0.62
-    ) || 0.56;
+    const fromGoodAssetThreshold = getGoodAssetThreshold(fromProfile, config);
 
     for (const opponentName of opponentNames) {
       if (opponentName === fromTeamName) {
@@ -1127,8 +1275,9 @@
               continue;
             }
 
-            if (getPosFilter && getPosRequirePlusOne && (incomingPosCount[getPosFilter] - outgoingPosCount[getPosFilter] < 1)) {
-              diagnostics.rejectedByGet += 1;
+            if (getPosFilter && getPosRequirePlusOne
+              && (incomingPosCount[getPosFilter] - outgoingPosCount[getPosFilter] !== 1)) {
+              diagnostics.rejectedByGetPlusOne += 1;
               continue;
             }
 
@@ -1137,45 +1286,32 @@
               continue;
             }
 
-            if (config.rejectSingleFaForDraftedPackage && inCount === 1 && outCount >= 1) {
-              const incomingSingle = incomingPlayers[0];
-              const outgoingHasMeaningfulDraftedAsset = outgoingPlayers.some((player) => isDraftedWithinCutoff(player, config.draftedPackagePickCutoffForSingleFa));
-              if (isSingleFaType(incomingSingle) && outgoingHasMeaningfulDraftedAsset) {
-                diagnostics.rejectedByDraftFpgRule += 1;
-                continue;
-              }
-            }
-
-            if (config.strictDraftFpgDominanceCheck && inCount === 1 && (outCount === 1 || outCount === 2)) {
-              const incomingHead = incomingPlayers[0];
-              const violatesDominance = outgoingPlayers.some((outgoingPlayer) => isDraftAndFpgDominance(outgoingPlayer, incomingHead));
-              if (violatesDominance) {
-                diagnostics.rejectedByDraftFpgRule += 1;
-                continue;
-              }
-            }
-
-            if (config.rejectOverpoweredMultiIncoming && inCount > outCount) {
-              const singleOutgoing = outgoingPlayers[0];
-              if (outgoingPlayers.length === 1 && incomingPlayers.length >= 2 && singleOutgoing) {
-                const incomingAllBetterFpg = incomingPlayers.every((player) => Number.isFinite(player.fpg) && Number.isFinite(singleOutgoing.fpg) && player.fpg > singleOutgoing.fpg);
-                const incomingHasEarlyDraft = incomingPlayers.some((player) => Number.isFinite(player.draftPick) && player.draftPick > 0 && player.draftPick <= 24);
-                const outgoingIsLateDraft = Number.isFinite(singleOutgoing.draftPick) && singleOutgoing.draftPick >= 120;
-
-                if (incomingAllBetterFpg && incomingHasEarlyDraft && outgoingIsLateDraft) {
-                  diagnostics.rejectedByDraftFpgRule += 1;
-                  continue;
-                }
-              }
-            }
-
             const fromDelta = evaluateTeamDelta(fromProfile, outgoingPlayers, incomingPlayers, config);
             const toDelta = evaluateTeamDelta(toProfile, incomingPlayers, outgoingPlayers, config);
+
+            // Dedicated plausibility step: runs on the fully constructed candidate, before ranking.
+            const plausibility = validateTradePlausibility({
+              config,
+              mode,
+              outgoingPlayers,
+              incomingPlayers,
+              fromUtility: fromDelta.totalDelta,
+              toUtility: toDelta.totalDelta,
+              goodAssetThresholdFrom: fromGoodAssetThreshold,
+              goodAssetThresholdTo: getGoodAssetThreshold(toProfile, config),
+            });
+            if (!plausibility.ok) {
+              diagnostics.rejectedByDraftFpgRule += 1;
+              diagnostics.rejectedByGuardrail[plausibility.reason] += 1;
+              continue;
+            }
 
             const fromObservedDelta = incomingPlayers.reduce((sum, player) => sum + player.observedSignal, 0)
               - outgoingPlayers.reduce((sum, player) => sum + player.observedSignal, 0);
             const fromDraftDelta = incomingPlayers.reduce((sum, player) => sum + player.draftExpectedValue, 0)
               - outgoingPlayers.reduce((sum, player) => sum + player.draftExpectedValue, 0);
+            const fromExpectedDelta = incomingPlayers.reduce((sum, player) => sum + player.expectedValue, 0)
+              - outgoingPlayers.reduce((sum, player) => sum + player.expectedValue, 0);
             const inefficiencyCapture = incomingPlayers.reduce((sum, player) => sum + player.opportunityGap, 0)
               - outgoingPlayers.reduce((sum, player) => sum + player.opportunityGap, 0);
             const fromRiskDelta = incomingPlayers.reduce((sum, player) => sum + player.regressionRisk + player.ageUncertainty, 0)
@@ -1188,12 +1324,7 @@
             const faForAnchorPenalty = outgoingOnlyFaOrLate && incomingHasEarlyAnchor ? 1 : 0;
             const draftJumpPenalty = Math.max(0, fromDraftDelta - (0.22 + (Math.max(0, outgoingPlayers.length - 1) * 0.12)));
 
-            const twoForOneGoodUpgrade = outCount === 2
-              && inCount === 1
-              && outgoingPlayers.every((player) => isGoodPlayerAsset(player, goodOutgoingThreshold))
-              && outgoingPlayers.every((player) => isDraftAndFpgDominance(incomingPlayers[0], player));
-
-            const twoForOneUpgradePenalty = twoForOneGoodUpgrade
+            const twoForOneUpgradePenalty = plausibility.rareConsolidation
               ? (mode === "fleece"
                 ? config.twoForOneGoodPlayerRarityPenaltyFleece
                 : config.twoForOneGoodPlayerRarityPenaltyFair)
@@ -1203,8 +1334,7 @@
             const fairnessScore = 1 - clamp(Math.abs(fromDelta.totalDelta - toDelta.totalDelta) / denominator, 0, 1);
             const fitScore = clamp((fromDelta.shortageDelta + toDelta.shortageDelta + 4) / 8, 0, 1);
             const upsideScore = clamp(
-              (incomingPlayers.reduce((sum, player) => sum + player.expectedValue, 0)
-                - outgoingPlayers.reduce((sum, player) => sum + player.expectedValue, 0)
+              (fromExpectedDelta
                 + outgoingPlayers.length)
               / Math.max(1, outgoingPlayers.length + incomingPlayers.length),
               0,
@@ -1435,6 +1565,7 @@
 
     return {
       proposals: normalized,
+      diagnostics,
       reason: normalized.length
         ? ""
         : buildNoProposalReason({
@@ -1454,5 +1585,7 @@
     classifyAcquisition,
     buildContext,
     generateProposals,
+    validateTradePlausibility,
+    GUARDRAIL_REASONS,
   };
 });
