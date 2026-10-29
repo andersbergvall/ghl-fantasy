@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 import re
+import unicodedata
 import pandas as pd
 import requests
 
@@ -27,6 +28,7 @@ FANTALYTICS_FRENZY_CSV = INPUT_CSV_DIR / "FantalyticsFrenzy.csv"
 DEFAULT_LEAGUE_ID = ""
 FANTRAX_PLAYER_STATS_URL = "https://www.fantrax.com/fxpa/downloadPlayerStats"
 FANTRAX_STANDINGS_URL = "https://www.fantrax.com/fxpa/downloadStandings"
+FANTRAX_TRANSACTION_HISTORY_URL = "https://www.fantrax.com/fxpa/downloadTransactionHistory"
 FANTRAX_MATCHUP_SCORES_URL = "https://www.fantrax.com/fxea/general/getMatchupScores"
 REQUIRED_COOKIE_KEYS = ("__cf_bm", "cf_clearance", "FX_RM", "JSESSIONID")
 
@@ -34,6 +36,7 @@ _PLAYER_STATS_DF_CACHE: Dict[tuple[str, int], pd.DataFrame] = {}
 _PLAYER_STATS_BY_ID_CACHE: Dict[tuple[str, int], Dict[str, Dict[str, Any]]] = {}
 _STANDINGS_TABLES_CACHE: Dict[tuple[str, int], Dict[str, pd.DataFrame]] = {}
 _SCHEDULE_TABLES_CACHE: Dict[tuple[str, int], Dict[str, pd.DataFrame]] = {}
+_PLAYER_STATS_BY_DATE_CACHE: Dict[tuple[str, str, str], List[Dict[str, Any]]] = {}
 DEFAULT_ENV_PATH = Path(r"C:\Users\sweabe\Dropbox\Desktop\GHL\env.txt")
 CONFIG_DIR = PROJECT_ROOT / "config"
 TROPHY_CONFIG_CSV = CONFIG_DIR / "trophy_config.csv"
@@ -1321,14 +1324,284 @@ def build_descending_competition_rank_lookup(values_by_id: Dict[str, float]) -> 
     return ranking
 
 
+def build_fantrax_headers() -> Dict[str, str]:
+    """Return browser-like headers plus the Fantrax auth cookie for protected exports."""
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+        "Referer": "https://www.fantrax.com/",
+        "Accept": "text/csv,application/json,text/plain,*/*",
+    }
+    cookie_header = build_cookie_header()
+    if cookie_header:
+        headers["Cookie"] = cookie_header
+    return headers
+
+
+def decode_fantrax_csv_response(response: requests.Response) -> str:
+    """Decode a Fantrax CSV export as UTF-8 (requests guesses latin-1 when no charset is sent)."""
+    try:
+        return response.content.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        return response.text or ""
+
+
+def build_player_name_key(value: Any) -> str:
+    """Accent- and punctuation-insensitive player name key for joins without an ID."""
+    text = normalize_fantrax_text(str(value or ""))
+    text = unicodedata.normalize("NFKD", text)
+    text = "".join(ch for ch in text if not unicodedata.combining(ch))
+    return re.sub(r"[^a-z0-9]", "", text.lower())
+
+
+def parse_trade_datetime(value: Any) -> datetime | None:
+    """Parse Fantrax transaction dates like 'Wed Oct 28, 2026, 6:54PM'."""
+    text = normalize_fantrax_text(str(value or "")).strip()
+    if not text:
+        return None
+
+    for date_format in ("%a %b %d, %Y, %I:%M%p", "%a %b %d, %Y, %I:%M %p"):
+        try:
+            return datetime.strptime(text, date_format)
+        except ValueError:
+            continue
+
+    match = re.search(r"([A-Za-z]{3})[A-Za-z]*\s+(\d{1,2}),?\s+(\d{4})", text)
+    if match:
+        try:
+            return datetime.strptime(f"{match.group(1)} {match.group(2)} {match.group(3)}", "%b %d %Y")
+        except ValueError:
+            return None
+    return None
+
+
+def get_trade_stats_start_date(season_key: str) -> str:
+    """Start date for by-date player stats: TRADE_STATS_START_DATE env, else Sep 1 of the season start year."""
+    configured = os.getenv("TRADE_STATS_START_DATE", "").strip()
+    if configured:
+        return configured
+    return f"{get_season_start_year(season_key) or 2026}-09-01"
+
+
+def download_trade_history_rows(league_id: str = DEFAULT_LEAGUE_ID) -> List[Dict[str, Any]]:
+    """Download executed trades from Fantrax and drop any row involving a '(Drop)' side."""
+    load_env_file()
+    league_id = require_fantrax_league_id(league_id)
+
+    response = requests.get(
+        FANTRAX_TRANSACTION_HISTORY_URL,
+        params={
+            "leagueId": league_id,
+            "pageNumber": 1,
+            "team": "ALL",
+            "positionOrGroup": "ALL",
+            "view": "TRADE",
+            "adminMode": "false",
+            "includeDeleted": "false",
+            "executedOnly": "true",
+        },
+        headers=build_fantrax_headers(),
+        timeout=30,
+    )
+    response.raise_for_status()
+
+    csv_text = decode_fantrax_csv_response(response)
+    if not csv_text.strip():
+        return []
+
+    rows: List[Dict[str, Any]] = []
+    for raw_row in csv.DictReader(io.StringIO(csv_text)):
+        row = {
+            normalize_fantrax_text(str(key)).strip(): normalize_fantrax_text(str(value or "")).strip()
+            for key, value in raw_row.items()
+            if key is not None
+        }
+        if not row.get("Player"):
+            continue
+        if row.get("From", "").lower() == "(drop)" or row.get("To", "").lower() == "(drop)":
+            continue
+        rows.append(row)
+
+    return rows
+
+
+def download_player_stats_by_date(league_id: str, start_date: str, end_date: str) -> List[Dict[str, Any]]:
+    """Download cumulative player stats for start_date..end_date (cached per range)."""
+    cache_key = (league_id, start_date, end_date)
+    if cache_key in _PLAYER_STATS_BY_DATE_CACHE:
+        return _PLAYER_STATS_BY_DATE_CACHE[cache_key]
+
+    season_or_projection = (os.getenv("FANTRAX_PLAYER_STATS_SEASON_BY_DATE", "SEASON_31n_BY_DATE") or "SEASON_31n_BY_DATE").strip()
+    response = requests.get(
+        FANTRAX_PLAYER_STATS_URL,
+        params={
+            "leagueId": league_id,
+            "pageNumber": 1,
+            "statusOrTeamFilter": "ALL",
+            "seasonOrProjection": season_or_projection,
+            "timeframeTypeCode": "BY_DATE",
+            "startDate": start_date,
+            "endDate": end_date,
+            "view": "STATS",
+            "positionOrGroup": "ALL",
+            "sortType": "SCORE",
+        },
+        headers=build_fantrax_headers(),
+        timeout=30,
+    )
+    response.raise_for_status()
+
+    csv_text = decode_fantrax_csv_response(response)
+    if not csv_text.strip():
+        _PLAYER_STATS_BY_DATE_CACHE[cache_key] = []
+        return []
+
+    df = pd.read_csv(io.StringIO(csv_text))
+    df.columns = [str(column).lstrip("\ufeff").strip() for column in df.columns]
+    rows = df.fillna("").to_dict(orient="records")
+    _PLAYER_STATS_BY_DATE_CACHE[cache_key] = rows
+    return rows
+
+
+class _PlayerStatsIndex:
+    """Lookup of Fantrax player stats rows by ID, name+NHL team, or unique name."""
+
+    def __init__(self, rows: List[Dict[str, Any]]) -> None:
+        self.by_id: Dict[str, Dict[str, Any]] = {}
+        self.by_name_team: Dict[tuple[str, str], Dict[str, Any]] = {}
+        self._by_name: Dict[str, List[Dict[str, Any]]] = {}
+
+        for row in rows:
+            player_id = normalize_player_id(row.get("ID"))
+            if player_id:
+                self.by_id[player_id] = row
+            name_key = build_player_name_key(row.get("Player"))
+            if not name_key:
+                continue
+            team_key = normalize_fantrax_text(str(row.get("Team") or "")).strip().upper()
+            self.by_name_team.setdefault((name_key, team_key), row)
+            self._by_name.setdefault(name_key, []).append(row)
+
+    def find(self, player_id: str, player_name: str, nhl_team: str) -> Dict[str, Any] | None:
+        if player_id and player_id in self.by_id:
+            return self.by_id[player_id]
+        name_key = build_player_name_key(player_name)
+        team_key = normalize_fantrax_text(str(nhl_team or "")).strip().upper()
+        row = self.by_name_team.get((name_key, team_key))
+        if row is not None:
+            return row
+        candidates = self._by_name.get(name_key, [])
+        return candidates[0] if len(candidates) == 1 else None
+
+
+def _optional_stat(row: Dict[str, Any] | None, column: str) -> float | None:
+    if row is None or row.get(column) in (None, ""):
+        return None
+    return round(_coerce_numeric(row.get(column)), 2)
+
+
+def build_trade_rows(
+    league_id: str,
+    season_key: str,
+    current_stats_by_id: Dict[str, Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    """Build one row per traded player with stats at trade time (by-date export) and current stats."""
+    league_id = require_fantrax_league_id(league_id)
+    start_date = get_trade_stats_start_date(season_key)
+    trades = download_trade_history_rows(league_id)
+
+    current_index = _PlayerStatsIndex(list(current_stats_by_id.values()))
+    date_indexes: Dict[str, _PlayerStatsIndex] = {}
+
+    result: List[Dict[str, Any]] = []
+    for trade in trades:
+        trade_dt = parse_trade_datetime(trade.get("Date (CET)"))
+        end_date = trade_dt.strftime("%Y-%m-%d") if trade_dt else ""
+
+        explicit_id = normalize_player_id(trade.get("ID") or trade.get("Player ID"))
+        player_name = trade.get("Player", "")
+        nhl_team = trade.get("Team", "")
+
+        traded_row: Dict[str, Any] | None = None
+        if end_date:
+            if end_date not in date_indexes:
+                date_indexes[end_date] = _PlayerStatsIndex(download_player_stats_by_date(league_id, start_date, end_date))
+            traded_row = date_indexes[end_date].find(explicit_id, player_name, nhl_team)
+
+        player_id = explicit_id or (normalize_player_id(traded_row.get("ID")) if traded_row else "")
+        current_row = current_index.find(player_id, player_name, nhl_team)
+        if not player_id and current_row is not None:
+            player_id = normalize_player_id(current_row.get("ID"))
+
+        traded_fpts = _optional_stat(traded_row, "FPts")
+        current_fpts = _optional_stat(current_row, "FPts")
+
+        result.append(
+            {
+                "Player": player_name,
+                "Team": nhl_team,
+                "Position": trade.get("Position", ""),
+                "From": trade.get("From", ""),
+                "To": trade.get("To", ""),
+                "Date (CET)": trade.get("Date (CET)", ""),
+                "Period": _coerce_optional_int(trade.get("Period")),
+                "FP/G (traded)": _optional_stat(traded_row, "FP/G"),
+                "FP/G (current)": _optional_stat(current_row, "FP/G"),
+                "Net FPts": (
+                    round(current_fpts - traded_fpts, 2)
+                    if current_fpts is not None and traded_fpts is not None
+                    else None
+                ),
+                "playerID": player_id,
+                "dateISO": trade_dt.strftime("%Y-%m-%dT%H:%M") if trade_dt else "",
+            }
+        )
+
+    result.sort(key=lambda item: (str(item.get("dateISO", "")), str(item.get("Player", "")).lower()), reverse=True)
+    return result
+
+
+def build_trades_json(season_key: str, trade_rows: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Wrap trade rows in the same season envelope used by the other KV payloads."""
+    return {
+        "season": {
+            season_key: {
+                "lastupdated": datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC"),
+                "trades": trade_rows,
+            }
+        }
+    }
+
+
+def build_empty_trades_json(season_key: str) -> Dict[str, Any]:
+    """Return a valid empty trades payload for seasons with no league data."""
+    return {"season": {season_key: {"lastupdated": "", "trades": []}}}
+
+
 def build_fa_player_stats_json(
     season_key: str | None = None,
     player_stats_by_id: Dict[str, Dict[str, Any]] | None = None,
+    trade_rows: List[Dict[str, Any]] | None = None,
 ) -> Dict[str, Any]:
-    """Build FA snipes rows from active rostered players and team/status transition rules."""
+    """Build FA snipes rows from active rostered players and team/status transition rules.
+
+    Players who are currently on a team they were traded to are excluded; players traded and then
+    dropped/picked up by a different team still qualify.
+    """
     season_name = season_key or os.getenv("SEASON_KEY", "2026-2027").strip() or "2026-2027"
     stats_by_id = player_stats_by_id if player_stats_by_id is not None else get_player_stats_by_id()
     active_team_by_gm = get_active_team_by_gm_code()
+
+    traded_to_by_player_id: Dict[str, set[str]] = {}
+    traded_to_by_name: Dict[str, set[str]] = {}
+    for trade in trade_rows or []:
+        to_team_key = normalize_team_compare_key(trade.get("To"))
+        if not to_team_key:
+            continue
+        traded_player_id = normalize_player_id(trade.get("playerID"))
+        if traded_player_id:
+            traded_to_by_player_id.setdefault(traded_player_id, set()).add(to_team_key)
+        else:
+            traded_to_by_name.setdefault(build_player_name_key(trade.get("Player")), set()).add(to_team_key)
 
     draft_team_by_player_id: Dict[str, str] = {}
     for draft_row in load_csv_rows(DRAFT_RESULTS_CSV):
@@ -1385,6 +1658,10 @@ def build_fa_player_stats_json(
 
         player_name = normalize_fantrax_text(str(stats_row.get("Player", "")).strip())
         if not player_name:
+            continue
+
+        traded_to_teams = traded_to_by_player_id.get(normalized_id) or traded_to_by_name.get(build_player_name_key(player_name), set())
+        if traded_to_teams and normalize_team_compare_key(current_team_name) in traded_to_teams:
             continue
 
         pos_value = normalize_fantrax_text(str(stats_row.get("Position") or stats_row.get("Pos") or stats_row.get("POS") or "").strip()).upper()
@@ -2347,6 +2624,7 @@ def publish_cloudflare_kv_snapshots(
     draft_class_payload: Dict[str, Any] | None = None,
     fa_player_payload: Dict[str, Any] | None = None,
     roster_payload: Dict[str, Any] | None = None,
+    trades_payload: Dict[str, Any] | None = None,
 ) -> Dict[str, Any]:
     """Publish tracker snapshots and the new draft-class stats to Cloudflare KV."""
     trophy_namespace_id = os.getenv("CLOUDFLARE_KV_NAMESPACE_ID_TROPHY_DATA", "").strip()
@@ -2388,6 +2666,14 @@ def publish_cloudflare_kv_snapshots(
             raise ValueError("Missing CLOUDFLARE_KV_NAMESPACE_ID_ROSTERS in the environment.")
         result["rosters"] = patch_cloudflare_kv_value(roster_namespace_id, roster_key, roster_payload)
 
+    if trades_payload is not None:
+        transactions_namespace_id = os.getenv("CLOUDFLARE_KV_NAMESPACE_ID_TRANSACTIONS", "").strip()
+        transactions_key = os.getenv("CLOUDFLARE_KV_KEY_TRANSACTIONS", "trades").strip() or "trades"
+        if transactions_namespace_id:
+            result["trades"] = patch_cloudflare_kv_value(transactions_namespace_id, transactions_key, trades_payload)
+        else:
+            result["trades"] = {"skipped": "CLOUDFLARE_KV_NAMESPACE_ID_TRANSACTIONS is not set."}
+
     return result
 
 
@@ -2411,6 +2697,16 @@ if __name__ == "__main__":
             standings_tables=standings_tables,
         )
         matchup_json = build_matchup_data_json(league_id=league_id, weeks_in_season=season_weeks, season_key=season_key)
+        # Trade tracking must never block the rest of the daily publish.
+        trade_rows: List[Dict[str, Any]] | None = None
+        try:
+            trade_rows = build_trade_rows(
+                league_id=league_id,
+                season_key=season_key,
+                current_stats_by_id=player_stats_by_id,
+            )
+        except Exception as trade_error:  # noqa: BLE001
+            print(f"WARNING: trade history could not be built: {trade_error}", flush=True)
         draft_class_json = build_drafted_player_stats_json(
             season_key=season_key,
             player_stats_by_id=player_stats_by_id,
@@ -2418,18 +2714,21 @@ if __name__ == "__main__":
         fa_player_stats_json = build_fa_player_stats_json(
             season_key=season_key,
             player_stats_by_id=player_stats_by_id,
+            trade_rows=trade_rows,
         )
         team_rosters_json = build_team_rosters_json(
             league_id=league_id,
             transaction_period=season_weeks,
             season_key=season_key,
         )
+        trades_json = build_trades_json(season_key, trade_rows) if trade_rows is not None else None
     else:
         final_json = buildSeasonTrophyJson({}, period_leaderboard=None, league_id="", standings_tables={})
         matchup_json = build_empty_matchup_data_json(season_key)
         draft_class_json = build_empty_drafted_player_stats_json(season_key)
         fa_player_stats_json = build_empty_fa_player_stats_json(season_key)
         team_rosters_json = build_empty_team_rosters_json(season_key)
+        trades_json = build_empty_trades_json(season_key)
 
     should_write_archived_jsons = os.getenv("WRITE_ARCHIVED_JSONS", "0").strip().lower() in {"1", "true", "yes", "on"}
     should_publish_cloudflare_kv = os.getenv("PUBLISH_TO_CLOUDFLARE_KV", "0").strip().lower() in {"1", "true", "yes", "on"}
@@ -2440,6 +2739,8 @@ if __name__ == "__main__":
         write_archived_season_payload(draft_class_json, "drafted-player-stats", season_key)
         write_archived_season_payload(fa_player_stats_json, "fa-player-stats", season_key)
         write_archived_season_payload(team_rosters_json, "rosters-data", season_key)
+        if trades_json is not None:
+            write_archived_season_payload(trades_json, "trades-data", season_key)
         print(json.dumps({
             "mode": "archive_only",
             "season": season_key,
@@ -2460,6 +2761,7 @@ if __name__ == "__main__":
             draft_class_json,
             fa_player_stats_json,
             team_rosters_json,
+            trades_json,
         )
         print(json.dumps({"cloudflare_kv": cloudflare_result}, ensure_ascii=False, indent=2))
         raise SystemExit(0)

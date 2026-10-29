@@ -69,6 +69,7 @@ const matchupDataUrl = window.__GHL_MATCHUP_DATA_URL__ || "/matchup-data";
 const draftClassDataUrl = window.__GHL_DRAFT_CLASS_DATA_URL__ || "/drafted-player-stats";
 const faPlayerStatsDataUrl = window.__GHL_FA_PLAYER_STATS_DATA_URL__ || "/fa-player-stats";
 const rostersDataUrl = window.__GHL_ROSTERS_DATA_URL__ || "/rosters";
+const tradesDataUrl = window.__GHL_TRADES_DATA_URL__ || "/trades";
 const trophyHistoryDataUrl = window.__GHL_TROPHY_DATA_HISTORY_URL__ || "/trophy-data-history";
 const matchupHistoryDataUrl = window.__GHL_MATCHUP_DATA_HISTORY_URL__ || "/matchup-data-history";
 const draftClassHistoryDataUrl = window.__GHL_DRAFT_CLASS_HISTORY_DATA_URL__ || "/drafted-player-stats-history";
@@ -81,6 +82,7 @@ let matchupData = {};
 let draftClassData = {};
 let faPlayerStatsData = {};
 let rostersData = {};
+let tradesData = {};
 let historicalTrackerData = {};
 let historicalMatchupData = {};
 let historicalDraftClassData = {};
@@ -156,6 +158,10 @@ let faSnipesSortDirection = "desc";
 let faSnipesPageIndex = 0;
 let faSnipesFantasyTeamFilter = new Set();
 let faSnipesOpenMultiFilter = null;
+let transactionsView = "fa-snipes";
+let tradesSortKey = "dateISO";
+let tradesSortDirection = "desc";
+let tradesTableScrollLeft = 0;
 let activeTopBoardTab = "leaderboard";
 let matchupTableScrollLeft = 0;
 let draftClassTableScrollLeft = 0;
@@ -1462,6 +1468,79 @@ function collectSeasonWinners(value, winners = []) {
   return winners;
 }
 
+const LEADERBOARD_BUFFER_ITEMS = new Set(
+  [
+    "Art Ross",
+    "Rocket Richard",
+    "Selke",
+    "Scout's Honor",
+    "Norris",
+    "Jack Adams",
+    "Hart",
+    "Lady Byng",
+    "Calder",
+    "Jim Gregory",
+    "Vezina",
+    "Fantalytic's Frenzy",
+  ].map((name) => normalizeBingoItemName(name))
+);
+const LEADERBOARD_SECOND_PLACE_VALUE_ITEMS = new Set(
+  ["Back's Backe Back-2-Back"].map((name) => normalizeBingoItemName(name))
+);
+
+// Returns grey-text suffix for a leading item: "(+#.##)" buffer to 2nd place, or "(value)" of 2nd place.
+function getLeaderboardLeadBuffer(itemName, itemValue) {
+  const itemKey = normalizeBingoItemName(itemName);
+  const showSecondPlaceValue = LEADERBOARD_SECOND_PLACE_VALUE_ITEMS.has(itemKey);
+  if (!showSecondPlaceValue && !LEADERBOARD_BUFFER_ITEMS.has(itemKey)) {
+    return "";
+  }
+
+  let rows = [];
+  if (Array.isArray(itemValue)) {
+    rows = itemValue
+      .filter((row) => row && typeof row === "object")
+      .map((row) => ({
+        team: row.Team || row["Fantasy Team"] || row["Team Name"] || "",
+        value: row.Fpts ?? row.score ?? row.value,
+      }));
+  } else if (itemValue && typeof itemValue === "object") {
+    rows = Object.entries(itemValue)
+      .filter(([key, value]) => key !== "status" && key !== "value" && key !== "Winner/Leader TBD" && (!value || typeof value !== "object"))
+      .map(([team, value]) => ({ team, value }));
+  }
+
+  if (rows.length < 2 || !rows[0].team || rows[0].team === "Winner/Leader TBD") {
+    return "";
+  }
+
+  const leader = rows[0];
+  const rivals = rows.slice(1).filter((row) => row.team && row.team !== leader.team && row.value !== null && row.value !== undefined && row.value !== "");
+  if (!rivals.length) {
+    return "";
+  }
+
+  if (showSecondPlaceValue) {
+    return `(${formatValue("", rivals[0].value)})`;
+  }
+
+  const leaderScore = getLeaderboardRankValue(leader.value);
+  if (!Number.isFinite(leaderScore)) {
+    return "";
+  }
+
+  const rivalScores = rivals
+    .map((row) => getLeaderboardRankValue(row.value))
+    .filter((score) => Number.isFinite(score));
+  if (!rivalScores.length) {
+    return "";
+  }
+
+  const secondScore = isLowestWinsAward(itemName) ? Math.min(...rivalScores) : Math.max(...rivalScores);
+  const buffer = Math.round(Math.abs(leaderScore - secondScore) * 100) / 100;
+  return `(+${formatValue("", buffer)})`;
+}
+
 function collectLeaderboardLeaders(seasonData) {
   const teamLeads = new Map();
 
@@ -1490,6 +1569,7 @@ function collectLeaderboardLeaders(seasonData) {
           sectionLabel,
           itemName,
           value: winner[1],
+          buffer: getLeaderboardLeadBuffer(itemName, itemValue),
         };
 
         if (!teamLeads.has(winner[0])) {
@@ -1546,7 +1626,7 @@ function renderLeaderboard(seasonKey) {
         .map((lead) => `
           <li class="leaderboard-item">
             <span class="leaderboard-item-name">${lead.sectionLabel} · ${lead.itemName}</span>
-            <span class="leaderboard-item-value">${lead.value}</span>
+            <span class="leaderboard-item-value">${lead.value}${lead.buffer ? ` <span class="leaderboard-item-buffer">${lead.buffer}</span>` : ""}</span>
           </li>
         `)
         .join("");
@@ -1928,8 +2008,160 @@ function sortFaSnipesRows(rows) {
   });
 }
 
+const tradesColumns = [
+  { key: "Player", label: "Player", type: "text" },
+  { key: "Team", label: "Team", type: "text" },
+  { key: "Position", label: "Pos", type: "text" },
+  { key: "From", label: "From", type: "text" },
+  { key: "To", label: "To", type: "text" },
+  { key: "dateISO", label: "Date (CET)", type: "text", displayKey: "Date (CET)" },
+  { key: "FP/G (traded)", label: "FP/G (traded)", type: "number" },
+  { key: "FP/G (current)", label: "FP/G (current)", type: "number" },
+  { key: "Net FPts", label: "Net FPts", type: "number" },
+];
+
+function renderTransactionsSubtabs() {
+  const buttons = [
+    { key: "fa-snipes", label: "FA Snipes" },
+    { key: "trades", label: "Trades" },
+  ];
+  return `<div class="transactions-subtabs" role="tablist">${buttons
+    .map((button) => `<button class="transactions-subtab${transactionsView === button.key ? " is-active" : ""}" type="button" role="tab" aria-selected="${transactionsView === button.key}" data-transactions-view="${button.key}">${button.label}</button>`)
+    .join("")}</div>`;
+}
+
+function bindTransactionsSubtabs(seasonKey) {
+  faSnipesPane.querySelectorAll("[data-transactions-view]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const nextView = button.getAttribute("data-transactions-view") === "trades" ? "trades" : "fa-snipes";
+      if (nextView === transactionsView) {
+        return;
+      }
+      transactionsView = nextView;
+      renderFaSnipesBoard(seasonKey);
+    });
+  });
+}
+
+function getTradesRows(seasonKey) {
+  const tradesSource = getSeasonPayloadForSource("trades", seasonKey);
+  const rows = tradesSource?.season?.[seasonKey]?.trades || [];
+  return Array.isArray(rows) ? rows : [];
+}
+
+function formatTradesCell(column, row) {
+  const value = row?.[column.displayKey || column.key];
+  if (value === undefined || value === null || value === "") {
+    return "-";
+  }
+  if (column.type === "number") {
+    const numeric = Number(value);
+    return Number.isFinite(numeric) ? numeric.toFixed(2) : "-";
+  }
+  return escapeHtml(value);
+}
+
+function sortTradesRows(rows) {
+  const column = tradesColumns.find((entry) => entry.key === tradesSortKey) || tradesColumns[5];
+  const direction = tradesSortDirection === "asc" ? 1 : -1;
+
+  return [...rows].sort((left, right) => {
+    const leftValue = left?.[column.key];
+    const rightValue = right?.[column.key];
+
+    if (column.type === "number") {
+      const leftMissing = leftValue === null || leftValue === undefined || leftValue === "";
+      const rightMissing = rightValue === null || rightValue === undefined || rightValue === "";
+      if (leftMissing !== rightMissing) {
+        return leftMissing ? 1 : -1;
+      }
+      const diff = Number(leftValue) - Number(rightValue);
+      if (diff) {
+        return diff * direction;
+      }
+    } else {
+      const compare = String(leftValue ?? "").localeCompare(String(rightValue ?? ""));
+      if (compare) {
+        return compare * direction;
+      }
+    }
+    return String(left?.Player || "").localeCompare(String(right?.Player || ""));
+  });
+}
+
+function renderTradesBoard(seasonKey) {
+  const existingTableWrap = faSnipesPane.querySelector(".trades-table-wrap");
+  if (existingTableWrap) {
+    tradesTableScrollLeft = existingTableWrap.scrollLeft;
+  }
+
+  const rows = sortTradesRows(getTradesRows(seasonKey));
+
+  const headerCells = tradesColumns
+    .map((column) => {
+      const isActive = tradesSortKey === column.key;
+      const indicator = isActive ? (tradesSortDirection === "asc" ? "↑" : "↓") : "↕";
+      return `<th><button class="matchup-sort${isActive ? " is-active" : ""}" data-trades-column="${escapeHtml(column.key)}" type="button"><span class="matchup-sort-label">${column.label}</span><span class="matchup-sort-indicator">${indicator}</span></button></th>`;
+    })
+    .join("");
+
+  const bodyRows = rows
+    .map((row) => {
+      const cells = tradesColumns
+        .map((column, columnIndex) => `<td class="${columnIndex === 0 ? "table-highlight" : ""}">${formatTradesCell(column, row)}</td>`)
+        .join("");
+      return `<tr>${cells}</tr>`;
+    })
+    .join("");
+
+  faSnipesPane.innerHTML = `
+    ${renderTransactionsSubtabs()}
+    <div class="draft-class-header">
+      <div class="draft-class-header-title">
+        <p class="eyebrow">Trades |</p>
+        <div class="draft-class-meta">${rows.length} players</div>
+      </div>
+    </div>
+    <div class="matchup-table-wrap draft-class-table-wrap fa-snipes-table-wrap trades-table-wrap">
+      <table class="matchup-table draft-class-table fa-snipes-table trades-table">
+        <thead><tr>${headerCells}</tr></thead>
+        <tbody>${bodyRows || `<tr><td colspan="${tradesColumns.length}">No trades found for this season.</td></tr>`}</tbody>
+      </table>
+    </div>
+  `;
+
+  bindTransactionsSubtabs(seasonKey);
+
+  const tradesTableWrap = faSnipesPane.querySelector(".trades-table-wrap");
+  if (tradesTableWrap) {
+    tradesTableWrap.scrollLeft = tradesTableScrollLeft;
+    tradesTableWrap.addEventListener("scroll", () => {
+      tradesTableScrollLeft = tradesTableWrap.scrollLeft;
+    });
+  }
+
+  faSnipesPane.querySelectorAll(".matchup-sort[data-trades-column]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const key = button.getAttribute("data-trades-column") || "dateISO";
+      if (tradesSortKey === key) {
+        tradesSortDirection = tradesSortDirection === "asc" ? "desc" : "asc";
+      } else {
+        tradesSortKey = key;
+        const column = tradesColumns.find((entry) => entry.key === key);
+        tradesSortDirection = column?.type === "number" || key === "dateISO" ? "desc" : "asc";
+      }
+      renderTradesBoard(seasonKey);
+    });
+  });
+}
+
 function renderFaSnipesBoard(seasonKey) {
   if (!faSnipesPane) {
+    return;
+  }
+
+  if (transactionsView === "trades") {
+    renderTradesBoard(seasonKey);
     return;
   }
 
@@ -1976,6 +2208,7 @@ function renderFaSnipesBoard(seasonKey) {
     .join("");
 
   faSnipesPane.innerHTML = `
+    ${renderTransactionsSubtabs()}
     <div class="draft-class-header">
       <div class="draft-class-header-title">
         <p class="eyebrow">FA Snipes |</p>
@@ -2004,6 +2237,8 @@ function renderFaSnipesBoard(seasonKey) {
       </table>
     </div>
   `;
+
+  bindTransactionsSubtabs(seasonKey);
 
   const faTableWrap = faSnipesPane.querySelector(".fa-snipes-table-wrap");
   if (faTableWrap) {
@@ -3233,6 +3468,7 @@ function getSeasonPayloadForSource(sourceKey, seasonKey) {
     draft: { active: draftClassData, history: historicalDraftClassData },
     fa: { active: faPlayerStatsData, history: historicalFaPlayerStatsData },
     rosters: { active: rostersData, history: historicalRostersData },
+    trades: { active: tradesData, history: {} },
   };
 
   const targetSource = sourceMap[sourceKey] || { active: {}, history: {} };
@@ -3508,6 +3744,14 @@ async function loadTrackerData() {
     fetch(draftClassHistoryDataUrl, { cache: "no-store" }).catch(() => ({ ok: false, status: 0 })),
     rostersHistoryRequest,
   ]);
+
+  // Trades are optional: a missing worker route or KV key must not break the rest of the app.
+  try {
+    const tradesResponse = await fetch(tradesDataUrl, { cache: "no-store" });
+    tradesData = tradesResponse.ok ? await tradesResponse.json() : { season: {} };
+  } catch (error) {
+    tradesData = { season: {} };
+  }
 
   if (!trophyResponse.ok) {
     throw new Error(`Failed to load trophy data (${trophyResponse.status})`);
