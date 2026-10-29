@@ -809,6 +809,31 @@ select {
   color: var(--muted);
 }
 
+.trade-card-list {
+  display: grid;
+  gap: 10px;
+}
+
+.trade-card {
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 12px;
+  background: rgba(11, 16, 32, 0.45);
+  padding: 10px;
+}
+
+.trade-player-stats strong.trade-stat {
+  font-weight: 800;
+  color: #ffffff;
+}
+
+.trade-player-stats strong.trade-stat.is-positive {
+  color: #4ade80;
+}
+
+.trade-player-stats strong.trade-stat.is-negative {
+  color: #f87171;
+}
+
 .tombola-rationale-list {
   margin: 0;
   padding-left: 18px;

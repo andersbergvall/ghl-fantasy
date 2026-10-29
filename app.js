@@ -159,9 +159,6 @@ let faSnipesPageIndex = 0;
 let faSnipesFantasyTeamFilter = new Set();
 let faSnipesOpenMultiFilter = null;
 let transactionsView = "fa-snipes";
-let tradesSortKey = "dateISO";
-let tradesSortDirection = "desc";
-let tradesTableScrollLeft = 0;
 let activeTopBoardTab = "leaderboard";
 let matchupTableScrollLeft = 0;
 let draftClassTableScrollLeft = 0;
@@ -2008,18 +2005,6 @@ function sortFaSnipesRows(rows) {
   });
 }
 
-const tradesColumns = [
-  { key: "Player", label: "Player", type: "text" },
-  { key: "Team", label: "Team", type: "text" },
-  { key: "Position", label: "Pos", type: "text" },
-  { key: "From", label: "From", type: "text" },
-  { key: "To", label: "To", type: "text" },
-  { key: "dateISO", label: "Date (CET)", type: "text", displayKey: "Date (CET)" },
-  { key: "FP/G (traded)", label: "FP/G (traded)", type: "number" },
-  { key: "FP/G (current)", label: "FP/G (current)", type: "number" },
-  { key: "Net FPts", label: "Net FPts", type: "number" },
-];
-
 function renderTransactionsSubtabs() {
   const buttons = [
     { key: "fa-snipes", label: "FA Snipes" },
@@ -2049,110 +2034,101 @@ function getTradesRows(seasonKey) {
   return Array.isArray(rows) ? rows : [];
 }
 
-function formatTradesCell(column, row) {
-  const value = row?.[column.displayKey || column.key];
-  if (value === undefined || value === null || value === "") {
-    return "-";
-  }
-  if (column.type === "number") {
-    const numeric = Number(value);
-    return Number.isFinite(numeric) ? numeric.toFixed(2) : "-";
-  }
-  return escapeHtml(value);
+function getTradeGroups(seasonKey) {
+  const groups = new Map();
+
+  getTradesRows(seasonKey).forEach((row) => {
+    const fromTeam = String(row?.From || "").trim();
+    const toTeam = String(row?.To || "").trim();
+    const dateLabel = String(row?.["Date (CET)"] || "").trim();
+    const dateISO = String(row?.dateISO || "");
+    const key = `${dateISO || dateLabel}|${[fromTeam, toTeam].sort().join("||")}`;
+
+    if (!groups.has(key)) {
+      groups.set(key, { dateISO, dateLabel, teams: [], players: [] });
+    }
+    const group = groups.get(key);
+    [toTeam, fromTeam].forEach((teamName) => {
+      if (teamName && !group.teams.includes(teamName)) {
+        group.teams.push(teamName);
+      }
+    });
+    group.players.push(row);
+  });
+
+  return [...groups.values()].sort((left, right) => left.dateISO.localeCompare(right.dateISO));
 }
 
-function sortTradesRows(rows) {
-  const column = tradesColumns.find((entry) => entry.key === tradesSortKey) || tradesColumns[5];
-  const direction = tradesSortDirection === "asc" ? 1 : -1;
+function formatTradeNumber(value, withSign = false) {
+  const numeric = value === null || value === undefined || value === "" ? NaN : Number(value);
+  if (!Number.isFinite(numeric)) {
+    return "-";
+  }
+  return `${withSign && numeric > 0 ? "+" : ""}${numeric.toFixed(2)}`;
+}
 
-  return [...rows].sort((left, right) => {
-    const leftValue = left?.[column.key];
-    const rightValue = right?.[column.key];
+function renderTradePlayerList(players) {
+  if (!players.length) {
+    return '<li class="tombola-player-item"><span class="tombola-player-meta">No players</span></li>';
+  }
 
-    if (column.type === "number") {
-      const leftMissing = leftValue === null || leftValue === undefined || leftValue === "";
-      const rightMissing = rightValue === null || rightValue === undefined || rightValue === "";
-      if (leftMissing !== rightMissing) {
-        return leftMissing ? 1 : -1;
-      }
-      const diff = Number(leftValue) - Number(rightValue);
-      if (diff) {
-        return diff * direction;
-      }
-    } else {
-      const compare = String(leftValue ?? "").localeCompare(String(rightValue ?? ""));
-      if (compare) {
-        return compare * direction;
-      }
-    }
-    return String(left?.Player || "").localeCompare(String(right?.Player || ""));
-  });
+  return players
+    .map((player) => {
+      const tradedFpg = Number(player?.["FP/G (traded)"]);
+      const sinceFpg = Number(player?.["FP/G (since trade)"]);
+      const hasBoth = player?.["FP/G (traded)"] != null && player?.["FP/G (since trade)"] != null
+        && Number.isFinite(tradedFpg) && Number.isFinite(sinceFpg);
+      const sinceClass = hasBoth && sinceFpg !== tradedFpg ? (sinceFpg > tradedFpg ? " is-positive" : " is-negative") : "";
+      const metaText = [player?.Position, player?.Team].map((part) => String(part || "").trim()).filter(Boolean).join(" | ");
+      return `
+        <li class="tombola-player-item">
+          <span class="tombola-player-name">${escapeHtml(player?.Player || "")}</span>
+          <span class="tombola-player-meta">${escapeHtml(metaText)}</span>
+          <span class="tombola-player-meta trade-player-stats">FP/G traded <strong class="trade-stat">${formatTradeNumber(player?.["FP/G (traded)"])}</strong> | Since trade <strong class="trade-stat${sinceClass}">${formatTradeNumber(player?.["FP/G (since trade)"])}</strong> | Net FPts <strong class="trade-stat">${formatTradeNumber(player?.["Net FPts"], true)}</strong></span>
+        </li>
+      `;
+    })
+    .join("");
+}
+
+function renderTradeCard(group) {
+  const sides = group.teams
+    .map((teamName) => `
+      <section class="tombola-trade-side">
+        <h5>${escapeHtml(teamName)} receives</h5>
+        <ul>${renderTradePlayerList(group.players.filter((player) => String(player?.To || "").trim() === teamName))}</ul>
+      </section>
+    `)
+    .join("");
+
+  return `
+    <div class="tombola-result-card trade-card">
+      <div class="tombola-result-header">
+        <p class="eyebrow">${escapeHtml(group.dateLabel || "Date unknown")}</p>
+        <h4 class="tombola-result-title">${group.teams.map((teamName) => escapeHtml(teamName)).join(" <span>↔</span> ")}</h4>
+      </div>
+      <div class="tombola-trade-grid">${sides}</div>
+    </div>
+  `;
 }
 
 function renderTradesBoard(seasonKey) {
-  const existingTableWrap = faSnipesPane.querySelector(".trades-table-wrap");
-  if (existingTableWrap) {
-    tradesTableScrollLeft = existingTableWrap.scrollLeft;
-  }
-
-  const rows = sortTradesRows(getTradesRows(seasonKey));
-
-  const headerCells = tradesColumns
-    .map((column) => {
-      const isActive = tradesSortKey === column.key;
-      const indicator = isActive ? (tradesSortDirection === "asc" ? "↑" : "↓") : "↕";
-      return `<th><button class="matchup-sort${isActive ? " is-active" : ""}" data-trades-column="${escapeHtml(column.key)}" type="button"><span class="matchup-sort-label">${column.label}</span><span class="matchup-sort-indicator">${indicator}</span></button></th>`;
-    })
-    .join("");
-
-  const bodyRows = rows
-    .map((row) => {
-      const cells = tradesColumns
-        .map((column, columnIndex) => `<td class="${columnIndex === 0 ? "table-highlight" : ""}">${formatTradesCell(column, row)}</td>`)
-        .join("");
-      return `<tr>${cells}</tr>`;
-    })
-    .join("");
+  const groups = getTradeGroups(seasonKey);
 
   faSnipesPane.innerHTML = `
     ${renderTransactionsSubtabs()}
     <div class="draft-class-header">
       <div class="draft-class-header-title">
         <p class="eyebrow">Trades |</p>
-        <div class="draft-class-meta">${rows.length} players</div>
+        <div class="draft-class-meta">${groups.length} trades</div>
       </div>
     </div>
-    <div class="matchup-table-wrap draft-class-table-wrap fa-snipes-table-wrap trades-table-wrap">
-      <table class="matchup-table draft-class-table fa-snipes-table trades-table">
-        <thead><tr>${headerCells}</tr></thead>
-        <tbody>${bodyRows || `<tr><td colspan="${tradesColumns.length}">No trades found for this season.</td></tr>`}</tbody>
-      </table>
+    <div class="trade-card-list">
+      ${groups.map((group) => renderTradeCard(group)).join("") || '<div class="empty-state compact">No trades found for this season.</div>'}
     </div>
   `;
 
   bindTransactionsSubtabs(seasonKey);
-
-  const tradesTableWrap = faSnipesPane.querySelector(".trades-table-wrap");
-  if (tradesTableWrap) {
-    tradesTableWrap.scrollLeft = tradesTableScrollLeft;
-    tradesTableWrap.addEventListener("scroll", () => {
-      tradesTableScrollLeft = tradesTableWrap.scrollLeft;
-    });
-  }
-
-  faSnipesPane.querySelectorAll(".matchup-sort[data-trades-column]").forEach((button) => {
-    button.addEventListener("click", () => {
-      const key = button.getAttribute("data-trades-column") || "dateISO";
-      if (tradesSortKey === key) {
-        tradesSortDirection = tradesSortDirection === "asc" ? "desc" : "asc";
-      } else {
-        tradesSortKey = key;
-        const column = tradesColumns.find((entry) => entry.key === key);
-        tradesSortDirection = column?.type === "number" || key === "dateISO" ? "desc" : "asc";
-      }
-      renderTradesBoard(seasonKey);
-    });
-  });
 }
 
 function renderFaSnipesBoard(seasonKey) {

@@ -1499,6 +1499,24 @@ def _optional_stat(row: Dict[str, Any] | None, column: str) -> float | None:
     return round(_coerce_numeric(row.get(column)), 2)
 
 
+def _fp_per_game_since_trade(
+    traded_fpts: float | None,
+    traded_fpg: float | None,
+    current_fpts: float | None,
+    current_fpg: float | None,
+) -> float | None:
+    """(current FPts - traded FPts) / (games at current - games at trade), with games = FPts / (FP/G)."""
+    if None in (traded_fpts, traded_fpg, current_fpts, current_fpg):
+        return None
+    # Games are whole numbers; rounding removes the noise from FP/G being rounded to 2 decimals.
+    traded_games = round(traded_fpts / traded_fpg) if traded_fpg else 0
+    current_games = round(current_fpts / current_fpg) if current_fpg else 0
+    games_since_trade = current_games - traded_games
+    if games_since_trade <= 0:
+        return None
+    return round((current_fpts - traded_fpts) / games_since_trade, 2)
+
+
 def build_trade_rows(
     league_id: str,
     season_key: str,
@@ -1534,6 +1552,8 @@ def build_trade_rows(
 
         traded_fpts = _optional_stat(traded_row, "FPts")
         current_fpts = _optional_stat(current_row, "FPts")
+        traded_fpg = _optional_stat(traded_row, "FP/G")
+        current_fpg = _optional_stat(current_row, "FP/G")
 
         result.append(
             {
@@ -1544,8 +1564,8 @@ def build_trade_rows(
                 "To": trade.get("To", ""),
                 "Date (CET)": trade.get("Date (CET)", ""),
                 "Period": _coerce_optional_int(trade.get("Period")),
-                "FP/G (traded)": _optional_stat(traded_row, "FP/G"),
-                "FP/G (current)": _optional_stat(current_row, "FP/G"),
+                "FP/G (traded)": traded_fpg,
+                "FP/G (since trade)": _fp_per_game_since_trade(traded_fpts, traded_fpg, current_fpts, current_fpg),
                 "Net FPts": (
                     round(current_fpts - traded_fpts, 2)
                     if current_fpts is not None and traded_fpts is not None
