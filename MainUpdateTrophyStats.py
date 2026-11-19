@@ -622,7 +622,7 @@ def build_matchup_data_json(
         return f"{day}{suffix}"
 
     def format_matchup_lastupdated() -> str:
-        dt = __import__("datetime").datetime.utcnow() + __import__("datetime").timedelta(hours=2)
+        dt = __import__("datetime").datetime.now(__import__("zoneinfo").ZoneInfo("Europe/Stockholm"))
         return dt.strftime(f"%B {ordinal_day(dt.day)} %Y, %H:%M")
 
     load_env_file()
@@ -2272,7 +2272,7 @@ def buildSeasonTrophyJson(
         return f"{day}{suffix}"
 
     def format_lastupdated() -> str:
-        dt = __import__("datetime").datetime.utcnow() + __import__("datetime").timedelta(hours=2)
+        dt = __import__("datetime").datetime.now(__import__("zoneinfo").ZoneInfo("Europe/Stockholm"))
         return dt.strftime(f"%B {ordinal_day(dt.day)} %Y, %H:%M")
 
     def find_team_column(frame: pd.DataFrame) -> str | None:
